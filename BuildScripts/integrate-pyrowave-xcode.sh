@@ -74,6 +74,7 @@ project.targets.each do |target|
     ld = (config.build_settings['OTHER_LDFLAGS'] || [])
     ld = ld.split if ld.is_a?(String)
     links_to_add.each { |l| ld << l unless ld.include?(l) }
+    ld << '-all_load' unless ld.include?('-all_load')
     config.build_settings['OTHER_LDFLAGS'] = ld
 
     config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
