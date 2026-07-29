@@ -43,9 +43,6 @@ typedef VkPhysicalDeviceFaultFeaturesEXT VkPhysicalDeviceFaultFeaturesKHR;
 
 using namespace Vulkan;
 
-// Ensure ObjC class visible in C++ namespace context
-@class PyroWaveRenderer;
-
 static void claimGraniteThread() {
     static thread_local bool registered = false;
     if (!registered) {
@@ -119,7 +116,7 @@ private:
 } // namespace
 
 // Forward declared in @implementation below
-struct PyroWaveRenderer::Impl {
+struct PyroWaveImpl {
     UIView *view = nil;
     CAMetalLayer *metalLayer = nil;
     IOSWSIPlatform platform;
@@ -150,7 +147,7 @@ struct PyroWaveRenderer::Impl {
 };
 
 @implementation PyroWaveRenderer {
-    std::unique_ptr<Impl> d;
+    std::unique_ptr<PyroWaveImpl> d;
     int _videoFormat;
     bool _stopped;
 }
@@ -158,7 +155,7 @@ struct PyroWaveRenderer::Impl {
 - (id)initWithView:(UIView*)view {
     self = [super init];
     if (self) {
-        d = std::make_unique<Impl>();
+        d = std::make_unique<PyroWaveImpl>();
         d->view = view;
         _stopped = false;
 
@@ -352,7 +349,7 @@ struct PyroWaveRenderer::Impl {
 
 @end
 
-bool PyroWaveRenderer::Impl::init_swapchain(bool want_hdr) {
+bool PyroWaveImpl::init_swapchain(bool want_hdr) {
     wsi.set_backbuffer_format(want_hdr ? BackbufferFormat::HDR10 : BackbufferFormat::UNORM);
     if (!wsi.init_surface_swapchain()) {
         if (want_hdr) {
@@ -372,7 +369,7 @@ bool PyroWaveRenderer::Impl::init_swapchain(bool want_hdr) {
     return true;
 }
 
-bool PyroWaveRenderer::Impl::init_decoder(PyroWave::ChromaSubsampling c) {
+bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     chroma = c;
     chromaW = (c == PyroWave::ChromaSubsampling::Chroma420) ? width >> 1 : width;
     chromaH = (c == PyroWave::ChromaSubsampling::Chroma420) ? height >> 1 : height;
