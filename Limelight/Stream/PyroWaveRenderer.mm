@@ -255,8 +255,11 @@ static void LogPyro(NSString *fmt, ...) {
     const char *dext[] = { "VK_KHR_swapchain" };
 
     ContextHandle ctx = Util::make_handle<Context>();
+    // Disable push descriptors — MoltenVK's push-descriptor path crashes on
+    // texel-buffer descriptors (used by PyroWave's texel-buffer fallback on Apple).
+    // Standard descriptor sets (vkUpdateDescriptorSets) are stable.
     if (!ctx->init_instance_and_device(iext.data(), (uint32_t)iext.size(), dext, 1,
-                                       CONTEXT_CREATION_ENABLE_PUSH_DESCRIPTOR_BIT)) {
+                                       0)) {
         LogPyro(@"Granite Vulkan context init failed");
         return NO;
     }
