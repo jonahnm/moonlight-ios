@@ -7,6 +7,8 @@
 #pragma push_macro("signals")
 #undef signals
 
+#import <time.h>
+
 #include "context.hpp"
 #include "device.hpp"
 #include "wsi.hpp"
