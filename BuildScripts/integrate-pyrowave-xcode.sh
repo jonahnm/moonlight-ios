@@ -105,7 +105,7 @@ if File.directory?(moltenvk_path)
   unless embed_phase
     embed_phase = project.new(Xcodeproj::Project::PBXCopyFilesBuildPhase)
     embed_phase.name = 'Embed Frameworks'
-    embed_phase.dst_subfolder_spec = 10  # frameworks
+    embed_phase.dst_subfolder_spec = '10'  # frameworks
     project.targets.first.build_phases << embed_phase
   end
   # Add framework file ref if not already present
