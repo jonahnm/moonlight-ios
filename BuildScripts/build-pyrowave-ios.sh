@@ -15,15 +15,6 @@ GRANITE_REPO="https://github.com/Themaister/Granite.git"
 IOS_CMAKE_REPO="https://github.com/leetal/ios-cmake.git"
 
 BUILD_DIR="/tmp/pyrowave-ios-build"
-
-# Skip everything if libraries already exist (cache hit)
-if [ -f "$LIBS_DIR/PyroWave/lib/libpyrowave.a" ] && \
-   [ -f "$LIBS_DIR/Granite/lib/libgranite-vulkan.a" ] && \
-   [ -d "$LIBS_DIR/MoltenVK/MoltenVK.framework" ]; then
-    echo "=== Libraries already built (cache hit), skipping ==="
-    exit 0
-fi
-
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
