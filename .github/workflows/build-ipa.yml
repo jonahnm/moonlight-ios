@@ -87,20 +87,24 @@ jobs:
         run: |
           if [ "$SIGNING" = "automatic" ] && [ -n "$APPLE_TEAM_ID" ]; then
             mkdir -p "$RUNNER_TEMP/export"
-            cat > "$RUNNER_TEMP/export/exportOptions.plist" << PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>method</key>
-  <string>development</string>
-  <key>signingStyle</key>
-  <string>automatic</string>
-  <key>teamID</key>
-  <string>${APPLE_TEAM_ID}</string>
-</dict>
-</plist>
-PLIST
+
+            # Write exportOptions.plist (avoid shell heredoc for YAML compat)
+            echo '<?xml version="1.0" encoding="UTF-8"?>' \
+              > "$RUNNER_TEMP/export/exportOptions.plist"
+            echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
+            echo '<plist version="1.0"><dict>' \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
+            echo '<key>method</key><string>development</string>' \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
+            echo '<key>signingStyle</key><string>automatic</string>' \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
+            echo '<key>teamID</key>' \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
+            echo "<string>${APPLE_TEAM_ID}</string>" \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
+            echo '</dict></plist>' \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
 
             xcodebuild -exportArchive \
               -archivePath "$RUNNER_TEMP/Moonlight.xcarchive" \
@@ -108,14 +112,11 @@ PLIST
               -exportOptionsPlist "$RUNNER_TEMP/export/exportOptions.plist" \
               -allowProvisioningUpdates
 
-            # xcodebuild places the IPA inside the export dir named <scheme>.ipa
-            # Rename it to include configuration for artifact clarity
             if [ -f "$GITHUB_WORKSPACE/build/$SCHEME.ipa" ]; then
               mv "$GITHUB_WORKSPACE/build/$SCHEME.ipa" \
                  "$GITHUB_WORKSPACE/build/Moonlight-$CONFIGURATION-signed.ipa"
             fi
           else
-            # Map scheme to product name
             if [ "$SCHEME" = "Moonlight TV" ]; then
               APP_NAME="Moonlight TV"
             else
