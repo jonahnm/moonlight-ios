@@ -385,7 +385,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     
     // PyroWave uses its own decoder path
     if (videoFormat & VIDEO_FORMAT_MASK_PYROWAVE) {
-        int ret = [_pyroRenderer submitDecodeUnit:decodeUnit];
+        int ret = [_pyroRenderer submitDecodeUnit:du];
         if (du->frameType == FRAME_TYPE_IDR && ret == DR_OK) {
             [self->_callbacks videoContentShown];
         }
