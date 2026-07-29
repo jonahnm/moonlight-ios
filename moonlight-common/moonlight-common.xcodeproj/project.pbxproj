@@ -498,12 +498,14 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = DM46QST4M7;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
-				HEADER_SEARCH_PATHS = (
-"moonlight-common-c/enet/include",
+HEADER_SEARCH_PATHS = (
+				"moonlight-common-c/enet/include",
 				"moonlight-common-c/nanors/deps/obl",
 				"moonlight-common-c/nanors/deps",
 				"../libs/**",
-				);
+			);
+				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
+				OTHER_CFLAGS = "-include time.h";
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = NO;
@@ -530,12 +532,14 @@
 				COPY_PHASE_STRIP = YES;
 				DEVELOPMENT_TEAM = DM46QST4M7;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
-				HEADER_SEARCH_PATHS = (
-"moonlight-common-c/enet/include",
+HEADER_SEARCH_PATHS = (
+				"moonlight-common-c/enet/include",
 				"moonlight-common-c/nanors/deps/obl",
 				"moonlight-common-c/nanors/deps",
 				"../libs/**",
-				);
+			);
+				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
+				OTHER_CFLAGS = "-include time.h";
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				ONLY_ACTIVE_ARCH = NO;
@@ -678,12 +682,14 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				EXECUTABLE_PREFIX = lib;
-				HEADER_SEARCH_PATHS = (
-"moonlight-common-c/enet/include",
+HEADER_SEARCH_PATHS = (
+				"moonlight-common-c/enet/include",
 				"moonlight-common-c/nanors/deps/obl",
 				"moonlight-common-c/nanors/deps",
 				"../libs/**",
-				);
+			);
+				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
+				OTHER_CFLAGS = "-include time.h";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				ONLY_ACTIVE_ARCH = NO;
@@ -698,12 +704,14 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "iPhone Distribution";
 				EXECUTABLE_PREFIX = lib;
-				HEADER_SEARCH_PATHS = (
-"moonlight-common-c/enet/include",
+HEADER_SEARCH_PATHS = (
+				"moonlight-common-c/enet/include",
 				"moonlight-common-c/nanors/deps/obl",
 				"moonlight-common-c/nanors/deps",
 				"../libs/**",
-				);
+			);
+				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
+				OTHER_CFLAGS = "-include time.h";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				ONLY_ACTIVE_ARCH = NO;
