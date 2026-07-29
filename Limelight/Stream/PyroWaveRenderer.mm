@@ -7,7 +7,7 @@
 #pragma push_macro("signals")
 #undef signals
 
-#include <ctime>
+// Ensure nanosleep is visible to libc++ __threading_support (Xcode 15.4 workaround)
 #include <time.h>
 
 #include "context.hpp"
