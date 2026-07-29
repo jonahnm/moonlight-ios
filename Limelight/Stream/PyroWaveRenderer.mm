@@ -66,7 +66,7 @@ public:
         sci.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
         sci.pNext = nullptr;
         sci.flags = 0;
-        sci.pLayer = (__bridge const CAMetalLayer *)metalLayer;
+        sci.pLayer = metalLayer;
         VkSurfaceKHR surface = VK_NULL_HANDLE;
         PFN_vkCreateMetalSurfaceEXT vkCreateMetalSurfaceEXT =
             (PFN_vkCreateMetalSurfaceEXT)vkGetInstanceProcAddr(instance, "vkCreateMetalSurfaceEXT");
