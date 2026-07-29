@@ -16,7 +16,7 @@ project_path = File.join(ENV['PROJECT_DIR'], 'Moonlight.xcodeproj')
 project = Xcodeproj::Project.open(project_path)
 
 main_group = project.main_group
-stream_group = main_group['Limelight']['Stream'] || main_group.new_group('Stream', 'Limelight/Stream')
+stream_group = main_group['Moonlight']['Stream'] || main_group.new_group('Stream', 'Limelight/Stream')
 
 files_to_add = ['PyroWaveRenderer.h', 'PyroWaveRenderer.mm', 'PyroWaveShaders.h']
 files_to_add.each do |f|
