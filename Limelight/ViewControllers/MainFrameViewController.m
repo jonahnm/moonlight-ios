@@ -714,6 +714,10 @@ static NSMutableSet* hostList;
         }
         _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE;
     }
+
+    Log(LOG_I, @"Stream config: serverCodecModeSupport=0x%x supportedVideoFormats=0x%x (PyroWave %@)",
+        app.host.serverCodecModeSupport, _streamConfig.supportedVideoFormats,
+        (_streamConfig.supportedVideoFormats & VIDEO_FORMAT_MASK_PYROWAVE) ? @"enabled" : @"DISABLED");
 }
 
 - (void)appLongClicked:(TemporaryApp *)app view:(UIView *)view {

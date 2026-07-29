@@ -10,6 +10,15 @@
 
 static LogLevel LoggerLogLevel = LOG_I;
 
+os_log_t MoonlightPublicLog(void) {
+    static os_log_t log;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        log = os_log_create("com.moonlight-stream.Moonlight", "app");
+    });
+    return log;
+}
+
 void LogTagv(LogLevel level, NSString* tag, NSString* fmt, va_list args);
 
 void Log(LogLevel level, NSString* fmt, ...) {
@@ -63,5 +72,14 @@ void LogTagv(LogLevel level, NSString* tag, NSString* fmt, va_list args) {
     vfprintf(stderr, [prefixedString stringByAppendingString:@"\n"].UTF8String, args_copy);
     va_end(args_copy);
 
-    NSLogv(prefixedString, args);
+    va_list args_copy2;
+    va_copy(args_copy2, args);
+    NSString* formatted = [[NSString alloc] initWithFormat:prefixedString arguments:args_copy2];
+    va_end(args_copy2);
+
+    // Emit with explicit public visibility so the message is not redacted
+    // as <private> when captured from a non-debugger device log stream.
+    os_log(MoonlightPublicLog(), "%{public}s", formatted.UTF8String);
+
+    NSLog(@"%@", formatted);
 }

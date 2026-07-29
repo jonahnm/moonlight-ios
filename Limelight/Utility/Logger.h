@@ -10,6 +10,7 @@
 #define Limelight_Logger_h
 
 #import <stdarg.h>
+#import <os/log.h>
 
 typedef enum {
     LOG_D,
@@ -25,5 +26,10 @@ typedef enum {
 
 void Log(LogLevel level, NSString* fmt, ...);
 void LogTag(LogLevel level, NSString* tag, NSString* fmt, ...);
+
+// Shared os_log handle whose messages are emitted with explicit public
+// visibility. Use this for diagnostics that must survive iOS privacy
+// redaction (<private>) when captured via idevicesyslog / log collect.
+os_log_t MoonlightPublicLog(void);
 
 #endif

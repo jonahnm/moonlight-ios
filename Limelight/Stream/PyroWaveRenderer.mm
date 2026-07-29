@@ -10,8 +10,14 @@
 
 // Xcode 15.4 / iOS 17.5 SDK workaround: the prebuilt Darwin.C.time module
 // doesn't export nanosleep or struct tm. Provide them directly.
-// struct tm is defined via :: (from module) and ctime imports it to std::.
-// No need to define it ourselves.
+// NOTE: _LIBCPP_HAS_NO_WIDE_CHARACTERS=1 (set in project defines) prevents
+// <cwchar> -> <wchar.h> from textually redefining struct tm, which would
+// conflict with this definition.
+struct tm {
+  int tm_sec; int tm_min; int tm_hour; int tm_mday; int tm_mon;
+  int tm_year; int tm_wday; int tm_yday; int tm_isdst;
+  long tm_gmtoff; const char *tm_zone;
+};
 extern "C" int nanosleep(const struct timespec *, struct timespec *);
 
 // Enable Metal surface extension and use Granite's Vulkan header wrapper
@@ -20,6 +26,27 @@ extern "C" int nanosleep(const struct timespec *, struct timespec *);
 #include <vulkan/vulkan_headers.hpp>
 // Alias for renamed Vulkan extension type (EXT is now defined by vulkan.h)
 typedef VkPhysicalDeviceFaultFeaturesEXT VkPhysicalDeviceFaultFeaturesKHR;
+
+#include <dlfcn.h>
+
+// Returns MoltenVK's real vkGetInstanceProcAddr entry point.
+//
+// volk defines a global *variable* named vkGetInstanceProcAddr which shadows
+// MoltenVK's exported *function* for both link-time binding and RTLD_DEFAULT
+// lookups, and Granite's fallback dlopen("libMoltenVK.dylib") cannot find an
+// embedded iOS framework. dlopen the embedded framework explicitly and use a
+// handle-scoped dlsym to bypass the shadowing.
+static PFN_vkGetInstanceProcAddr loadMoltenVKGIPA(void) {
+    static PFN_vkGetInstanceProcAddr gipa = nullptr;
+    if (!gipa) {
+        void *h = dlopen("@executable_path/Frameworks/MoltenVK.framework/MoltenVK",
+                         RTLD_LAZY | RTLD_LOCAL);
+        if (h) {
+            gipa = (PFN_vkGetInstanceProcAddr)dlsym(h, "vkGetInstanceProcAddr");
+        }
+    }
+    return gipa;
+}
 
 #include "context.hpp"
 #include "device.hpp"
@@ -146,9 +173,11 @@ struct PyroWaveImpl {
 static void LogPyro(NSString *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    NSString *msg = [NSString stringWithFormat:@"[PyroWave] %@\n", fmt];
-    vfprintf(stderr, msg.UTF8String, args);
+    NSString *msg = [[NSString alloc] initWithFormat:[@"[PyroWave] " stringByAppendingString:fmt] arguments:args];
     va_end(args);
+    fprintf(stderr, "%s\n", msg.UTF8String);
+    // Public os_log so messages survive iOS privacy redaction in device logs
+    os_log(MoonlightPublicLog(), "%{public}s", msg.UTF8String);
 }
 
 @implementation PyroWaveRenderer {
@@ -210,7 +239,12 @@ static void LogPyro(NSString *fmt, ...) {
 
     LogPyro(@"Initializing Vulkan context (%dx%d)...", d->width, d->height);
 
-    if (!Context::init_loader(nullptr)) {
+    PFN_vkGetInstanceProcAddr gipa = loadMoltenVKGIPA();
+    if (!gipa) {
+        LogPyro(@"Failed to locate MoltenVK vkGetInstanceProcAddr (embedded framework missing?)");
+        return NO;
+    }
+    if (!Context::init_loader(gipa)) {
         LogPyro(@"Vulkan loader init failed");
         return NO;
     }

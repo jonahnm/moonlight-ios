@@ -336,6 +336,20 @@ void ClLogMessage(const char* format, ...)
     va_start(va, format);
     vfprintf(stderr, format, va);
     va_end(va);
+
+    // Mirror to os_log with public visibility so common-c logs (RTSP
+    // negotiation, video stream setup, errors) are not redacted as
+    // <private> in device log captures.
+    va_start(va, format);
+    char buf[2048];
+    vsnprintf(buf, sizeof(buf), format, va);
+    va_end(va);
+    buf[sizeof(buf) - 1] = '\0';
+    size_t len = strlen(buf);
+    while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r')) {
+        buf[--len] = '\0';
+    }
+    os_log(MoonlightPublicLog(), "[common-c] %{public}s", buf);
 }
 
 void ClRumble(unsigned short controllerNumber, unsigned short lowFreqMotor, unsigned short highFreqMotor)
