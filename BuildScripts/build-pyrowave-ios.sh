@@ -52,6 +52,48 @@ if [ ! -d "Granite" ]; then
     cd Granite
     git checkout "$GRANITE_REV"
     git submodule update --init --recursive
+
+    # Patch util/timer.cpp for iOS compatibility
+    # clock_nanosleep + TIMER_ABSTIME is Linux-only; use nanosleep on Apple platforms.
+    python3 << 'PYEOF'
+old = '''#else
+\tconstexpr auto timebase = CLOCK_MONOTONIC;
+\tstruct timespec ts = {};
+\tts.tv_sec = timepoint / 1000000000ll;
+\tts.tv_nsec = timepoint % 1000000000ll;
+\t// Linux does not support clock_nanosleep with MONOTONIC_RAW :(
+\tint ret;
+\twhile ((ret = clock_nanosleep(timebase, TIMER_ABSTIME, &ts, nullptr)) == EINTR) {}
+#endif'''
+new = '''#elif defined(__APPLE__)
+\tint64_t d = timepoint - get_current_time_nsecs();
+\tif (d > 0)
+\t{
+\t\tstruct timespec ts = {};
+\t\tts.tv_sec = d / 1000000000ll;
+\t\tts.tv_nsec = d % 1000000000ll;
+\t\twhile (nanosleep(&ts, &ts) == -1 && errno == EINTR) {}
+\t}
+#else
+\tconstexpr auto timebase = CLOCK_MONOTONIC;
+\tstruct timespec ts = {};
+\tts.tv_sec = timepoint / 1000000000ll;
+\tts.tv_nsec = timepoint % 1000000000ll;
+\t// Linux does not support clock_nanosleep with MONOTONIC_RAW :(
+\tint ret;
+\twhile ((ret = clock_nanosleep(timebase, TIMER_ABSTIME, &ts, nullptr)) == EINTR) {}
+#endif'''
+import sys
+with open('util/timer.cpp') as f:
+    content = f.read()
+if old not in content:
+    print('ERROR: Pattern not found in util/timer.cpp', file=sys.stderr)
+    sys.exit(1)
+content = content.replace(old, new, 1)
+with open('util/timer.cpp', 'w') as f:
+    f.write(content)
+print('Patched util/timer.cpp for iOS')
+PYEOF
     cd "$BUILD_DIR"
 fi
 
