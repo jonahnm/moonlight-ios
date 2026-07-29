@@ -68,17 +68,32 @@ echo "=== Building Granite + PyroWave for iOS arm64 ==="
 mkdir -p build-ios
 cd build-ios
 
-cmake ../pyrowave -G Ninja \
+# Write wrapper CMakeLists.txt so PyroWave is NOT a top-level project.
+# This avoids building test executables (which fail on iOS) and install targets.
+cat > CMakeLists.txt << 'WRAPPER'
+cmake_minimum_required(VERSION 3.20)
+project(pyrowave-ios LANGUAGES CXX C)
+
+set(GRANITE_RENDERER OFF CACHE BOOL "" FORCE)
+set(GRANITE_VULKAN_SPIRV_CROSS ON CACHE BOOL "" FORCE)
+set(GRANITE_VULKAN_SYSTEM_HANDLES ON CACHE BOOL "" FORCE)
+set(GRANITE_POSITION_INDEPENDENT ON CACHE BOOL "" FORCE)
+set(GRANITE_VULKAN_FOSSILIZE OFF CACHE BOOL "" FORCE)
+set(GRANITE_SHIPPING ON CACHE BOOL "" FORCE)
+set(GRANITE_PLATFORM "null" CACHE STRING "" FORCE)
+set(GRANITE_VIDEO OFF CACHE BOOL "" FORCE)
+set(GRANITE_FFMPEG OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(${GRANITE_SOURCE_DIR} Granite EXCLUDE_FROM_ALL)
+add_subdirectory(${PYROWAVE_SOURCE_DIR} pyrowave EXCLUDE_FROM_ALL)
+WRAPPER
+
+cmake . -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_TOOLCHAIN_FILE="$BUILD_DIR/ios.toolchain.cmake" \
     -DPLATFORM=OS64 \
     -DGRANITE_SOURCE_DIR="$BUILD_DIR/Granite" \
-    -DPYROWAVE_DEVEL=OFF \
-    -DGRANITE_VULKAN_SYSTEM_HANDLES=ON \
-    -DGRANITE_VULKAN_SPIRV_CROSS=ON \
-    -DSDL_UNIX_CONSOLE_BUILD=ON \
-    -DSDL_SHARED=OFF \
-    -DSDL_STATIC=OFF \
+    -DPYROWAVE_SOURCE_DIR="$BUILD_DIR/pyrowave" \
     -DVulkan_INCLUDE_DIR="$LIBS_DIR/MoltenVK/include" \
     -DVulkan_LIBRARY="$LIBS_DIR/MoltenVK/MoltenVK.framework"
 
