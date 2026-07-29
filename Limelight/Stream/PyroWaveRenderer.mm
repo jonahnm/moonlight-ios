@@ -402,9 +402,7 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     return true;
 }
 
-// Stub implementations for Granite::GLSLCompiler (not built with GRANITE_RENDERER=OFF)
-#include <glsl/glsl.hpp>
-
+// Stub for Granite::GLSLCompiler methods (class defined by existing Granite headers)
 namespace Granite {
 GLSLCompiler::GLSLCompiler(FilesystemInterface &) {}
 void GLSLCompiler::set_source_from_file(const std::string &, Stage) {}
