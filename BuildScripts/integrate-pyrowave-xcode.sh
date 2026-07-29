@@ -50,7 +50,7 @@ links_to_add = %w[
 defines_to_add = %w[
   HAVE_PYROWAVE=1 GRANITE_VULKAN_SYSTEM_HANDLES=1
   GRANITE_VULKAN_SPIRV_CROSS=1 PYROWAVE_PRECISION=1
-  _DARWIN_C_SOURCE=1 _POSIX_C_SOURCE=200809L
+  _DARWIN_C_SOURCE=1 _POSIX_C_SOURCE=200809L _LIBCPP_HAS_NO_WIDE_CHARACTERS=1
 ]
 
 project.targets.each do |target|
@@ -77,12 +77,6 @@ project.targets.each do |target|
 
     config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
     config.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
-
-    cxx_flags = (config.build_settings['OTHER_CPLUSPLUSFLAGS'] || ['$(inherited)'])
-    cxx_flags = cxx_flags.split if cxx_flags.is_a?(String)
-    cxx_flags << '$(inherited)' unless cxx_flags.include?('$(inherited)')
-    cxx_flags << '-fcxx-modules' unless cxx_flags.include?('-fcxx-modules')
-    config.build_settings['OTHER_CPLUSPLUSFLAGS'] = cxx_flags
 
     gcc = (config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)'])
     gcc = gcc.split if gcc.is_a?(String)

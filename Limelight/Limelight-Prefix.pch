@@ -7,11 +7,6 @@
 #import <Availability.h>
 #include <TargetConditionals.h>
 
-// Ensure nanosleep visible from <time.h> (Xcode 15.4 / iOS 17.5 SDK workaround)
-#ifdef __cplusplus
-#define _POSIX_C_SOURCE 200809L
-#include <time.h>
-#endif
 
 #ifndef __IPHONE_3_0
 #warning "This project uses features only available in iOS SDK 3.0 and later."
