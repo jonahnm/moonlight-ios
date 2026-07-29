@@ -43,6 +43,9 @@ typedef VkPhysicalDeviceFaultFeaturesEXT VkPhysicalDeviceFaultFeaturesKHR;
 
 using namespace Vulkan;
 
+// Ensure ObjC class visible in C++ namespace context
+@class PyroWaveRenderer;
+
 static void claimGraniteThread() {
     static thread_local bool registered = false;
     if (!registered) {
@@ -115,6 +118,7 @@ private:
 
 } // namespace
 
+// Forward declared in @implementation below
 struct PyroWaveRenderer::Impl {
     UIView *view = nil;
     CAMetalLayer *metalLayer = nil;
