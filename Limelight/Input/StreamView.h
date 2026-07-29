@@ -8,6 +8,7 @@
 
 #import "ControllerSupport.h"
 #import "OnScreenControls.h"
+#import <CoreBluetooth/CoreBluetooth.h>
 #import "Moonlight-Swift.h"
 #import "StreamConfiguration.h"
 
