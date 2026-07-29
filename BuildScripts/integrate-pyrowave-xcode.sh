@@ -74,12 +74,6 @@ project.targets.each do |target|
     links_to_add.each { |l| ld << l unless ld.include?(l) }
     config.build_settings['OTHER_LDFLAGS'] = ld
 
-    cxxflags = (config.build_settings['OTHER_CPLUSPLUSFLAGS'] || ['$(inherited)'])
-    cxxflags = cxxflags.split if cxxflags.is_a?(String)
-    cxxflags << '$(inherited)' unless cxxflags.include?('$(inherited)')
-    %w[-fmodules -fcxx-modules].each { |f| cxxflags << f unless cxxflags.include?(f) }
-    config.build_settings['OTHER_CPLUSPLUSFLAGS'] = cxxflags
-
     config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
     config.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
 

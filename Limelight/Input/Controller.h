@@ -8,8 +8,8 @@
 
 #import "HapticContext.h"
 
-@import GameController;
-@import CoreHaptics;
+#import <GameController/GameController.h>
+#import <CoreHaptics/CoreHaptics.h>
 
 @interface Controller : NSObject
 
