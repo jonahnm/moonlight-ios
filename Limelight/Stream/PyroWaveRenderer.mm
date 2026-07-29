@@ -7,7 +7,7 @@
 #pragma push_macro("signals")
 #undef signals
 
-#import <time.h>
+@import Darwin.C.time;
 
 #include "context.hpp"
 #include "device.hpp"
