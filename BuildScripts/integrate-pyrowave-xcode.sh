@@ -42,11 +42,10 @@ header_paths_to_add = [
   '$(PROJECT_DIR)/libs/SDL2/include',
 ]
 framework_paths_to_add = ['$(PROJECT_DIR)/libs/MoltenVK']
-links_to_add = %w[
-  -lpyrowave -lgranite-vulkan -lgranite-math -lgranite-threading
-  -lgranite-filesystem -lgranite-path -lgranite-volk -lspirv-cross-core
-  -lgranite-stb -lgranite-util -lgranite-application-global -lgranite-glsl
-]
+# Auto-detect Granite libs from libs/Granite/lib/
+granite_libs = Dir.glob(File.join(ENV['PROJECT_DIR'], 'libs', 'Granite', 'lib', '*.a'))
+               .map { |f| "-l" + File.basename(f).sub(/^lib/, '').sub(/\.a$/, '') }
+links_to_add = %w[-lpyrowave] + granite_libs
 frameworks_to_add = %w[MoltenVK QuartzCore Metal]
 defines_to_add = %w[
   HAVE_PYROWAVE=1 GRANITE_VULKAN_SYSTEM_HANDLES=1
