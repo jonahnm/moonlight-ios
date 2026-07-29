@@ -53,6 +53,15 @@ jobs:
           brew install cmake ninja
           gem install xcodeproj
 
+      - name: Cache PyroWave libraries
+        uses: actions/cache@v4
+        with:
+          path: |
+            libs/Granite
+            libs/PyroWave
+            libs/MoltenVK
+          key: pyrowave-${{ hashFiles('BuildScripts/build-pyrowave-ios.sh') }}
+
       - name: Build PyroWave dependencies (Granite + PyroWave + MoltenVK)
         run: bash BuildScripts/build-pyrowave-ios.sh
 

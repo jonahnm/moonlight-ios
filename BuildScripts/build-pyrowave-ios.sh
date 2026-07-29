@@ -15,13 +15,22 @@ GRANITE_REPO="https://github.com/Themaister/Granite.git"
 IOS_CMAKE_REPO="https://github.com/leetal/ios-cmake.git"
 
 BUILD_DIR="/tmp/pyrowave-ios-build"
+
+# Skip everything if libraries already exist (cache hit)
+if [ -f "$LIBS_DIR/PyroWave/lib/libpyrowave.a" ] && \
+   [ -f "$LIBS_DIR/Granite/lib/libgranite-vulkan.a" ] && \
+   [ -d "$LIBS_DIR/MoltenVK/MoltenVK.framework" ]; then
+    echo "=== Libraries already built (cache hit), skipping ==="
+    exit 0
+fi
+
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
 # ── ios-cmake toolchain ──────────────────────────────────────────
 if [ ! -f "ios.toolchain.cmake" ]; then
     echo "=== Downloading ios-cmake ==="
-    git clone --depth 1 "$IOS_CMAKE_REPO" ios-cmake
+    git clone --depth 1 -q "$IOS_CMAKE_REPO" ios-cmake
     cp ios-cmake/ios.toolchain.cmake .
 fi
 
@@ -48,13 +57,15 @@ fi
 # ── Granite ──────────────────────────────────────────────────────
 if [ ! -d "Granite" ]; then
     echo "=== Fetching Granite ==="
-    git clone "$GRANITE_REPO" Granite
+    mkdir Granite
     cd Granite
-    git checkout "$GRANITE_REV"
-    git submodule update --init --recursive
+    git init -q
+    git remote add origin "$GRANITE_REPO"
+    git fetch --depth 1 origin "$GRANITE_REV"
+    git checkout FETCH_HEAD -q
+    git submodule update --init --recursive --depth 1
 
     # Patch util/timer.cpp for iOS compatibility
-    # clock_nanosleep + TIMER_ABSTIME is Linux-only; use nanosleep on Apple platforms.
     python3 << 'PYEOF'
 old = '''#else
 \tconstexpr auto timebase = CLOCK_MONOTONIC;
@@ -100,9 +111,12 @@ fi
 # ── PyroWave ─────────────────────────────────────────────────────
 if [ ! -d "pyrowave" ]; then
     echo "=== Fetching PyroWave ==="
-    git clone "$PYROWAVE_REPO" pyrowave
+    mkdir pyrowave
     cd pyrowave
-    git checkout "$PYROWAVE_REV"
+    git init -q
+    git remote add origin "$PYROWAVE_REPO"
+    git fetch --depth 1 origin "$PYROWAVE_REV"
+    git checkout FETCH_HEAD -q
     cd "$BUILD_DIR"
 fi
 
@@ -159,7 +173,7 @@ rsync -a --include='*/' --include='*.hpp' --include='*.h' --exclude='*' \
   "$BUILD_DIR/Granite/" "$LIBS_DIR/Granite/include/"
 # Remove third-party headers that shadow Apple system headers
 rm -rf "$LIBS_DIR/Granite/include/third_party/rapidjson/include/rapidjson/msinttypes"
-rm -rf "$LIBS_DIR/Granite/include/third_party/dirent"
+find "$LIBS_DIR/Granite/include/third_party" -type d -name dirent -exec rm -rf {} + 2>/dev/null || true
 
 echo "=== Build complete ==="
 echo "Libraries placed in:"
