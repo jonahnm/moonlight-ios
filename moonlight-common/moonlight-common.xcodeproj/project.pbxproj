@@ -501,6 +501,7 @@
 				HEADER_SEARCH_PATHS = (
 "moonlight-common-c/enet/include",
 				"moonlight-common-c/nanors/deps/obl",
+				"moonlight-common-c/nanors/deps",
 				"../libs/**",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
@@ -532,6 +533,7 @@
 				HEADER_SEARCH_PATHS = (
 "moonlight-common-c/enet/include",
 				"moonlight-common-c/nanors/deps/obl",
+				"moonlight-common-c/nanors/deps",
 				"../libs/**",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
@@ -679,6 +681,7 @@
 				HEADER_SEARCH_PATHS = (
 "moonlight-common-c/enet/include",
 				"moonlight-common-c/nanors/deps/obl",
+				"moonlight-common-c/nanors/deps",
 				"../libs/**",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
@@ -698,6 +701,7 @@
 				HEADER_SEARCH_PATHS = (
 "moonlight-common-c/enet/include",
 				"moonlight-common-c/nanors/deps/obl",
+				"moonlight-common-c/nanors/deps",
 				"../libs/**",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
