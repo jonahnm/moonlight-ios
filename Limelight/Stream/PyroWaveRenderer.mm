@@ -7,9 +7,10 @@
 #pragma push_macro("signals")
 #undef signals
 
-// Forward declarations to work around iOS 17.5 SDK nanosleep/tm issues
+// Xcode 15.4 / iOS 17.5 SDK workaround: the prebuilt Darwin.C.time module
+// doesn't export nanosleep or tm. Forward-declare them directly.
 struct timespec;
-namespace std { struct tm; }
+struct tm;
 extern "C" int nanosleep(const struct timespec *, struct timespec *);
 
 #include "context.hpp"
