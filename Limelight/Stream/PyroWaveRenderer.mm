@@ -402,28 +402,16 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     return true;
 }
 
-// Stub for Granite::GLSLCompiler (static library built without GRANITE_RENDERER)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunknown-pragmas"
-#if __has_include(<glsl/glsl.hpp>)
+// Stub implementations for Granite::GLSLCompiler (not built with GRANITE_RENDERER=OFF)
 #include <glsl/glsl.hpp>
-#endif
 
 namespace Granite {
-#if !defined(GRANITE_GLSL_GLSL_HPP_)
-enum class Stage { Vertex, Fragment, Compute };
-class FilesystemInterface {};
-class GLSLCompiler {
-public:
-  GLSLCompiler(FilesystemInterface &) {}
-  void set_source_from_file(const std::string &, Stage) {}
-  void set_include_directories(const std::vector<std::string> *) {}
-  uint64_t get_source_hash() const { return 0; }
-  bool compile(std::string &,
-               const std::vector<std::pair<std::string, int>> *) const {
-    return false;
-  }
-};
-#endif
+GLSLCompiler::GLSLCompiler(FilesystemInterface &) {}
+void GLSLCompiler::set_source_from_file(const std::string &, Stage) {}
+void GLSLCompiler::set_include_directories(const std::vector<std::string> *) {}
+uint64_t GLSLCompiler::get_source_hash() const { return 0; }
+bool GLSLCompiler::compile(std::string &,
+                           const std::vector<std::pair<std::string, int>> *) const {
+  return false;
+}
 } // namespace Granite
-#pragma clang diagnostic pop
