@@ -51,6 +51,7 @@ if [ ! -d "Granite" ]; then
     git clone "$GRANITE_REPO" Granite
     cd Granite
     git checkout "$GRANITE_REV"
+    git submodule update --init --recursive
     cd "$BUILD_DIR"
 fi
 
