@@ -24,6 +24,10 @@ typedef enum {
 #define PRFX_WARN @"<WARN>"
 #define PRFX_ERROR @"<ERROR>"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void Log(LogLevel level, NSString* fmt, ...);
 void LogTag(LogLevel level, NSString* tag, NSString* fmt, ...);
 
@@ -31,5 +35,9 @@ void LogTag(LogLevel level, NSString* tag, NSString* fmt, ...);
 // visibility. Use this for diagnostics that must survive iOS privacy
 // redaction (<private>) when captured via idevicesyslog / log collect.
 os_log_t MoonlightPublicLog(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
