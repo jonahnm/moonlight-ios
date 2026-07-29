@@ -7,15 +7,6 @@
 #import <Availability.h>
 #include <TargetConditionals.h>
 
-// Force textual include of <time.h> before any module import (Xcode 15.4 workaround)
-#ifdef __cplusplus
-#pragma clang module off
-#define _POSIX_C_SOURCE 200809L
-#include <time.h>
-#pragma clang module on
-#endif
-
-
 #ifndef __IPHONE_3_0
 #warning "This project uses features only available in iOS SDK 3.0 and later."
 #endif

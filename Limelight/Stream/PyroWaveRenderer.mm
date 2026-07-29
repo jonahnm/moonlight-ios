@@ -7,6 +7,11 @@
 #pragma push_macro("signals")
 #undef signals
 
+// Forward declarations to work around iOS 17.5 SDK nanosleep/tm issues
+struct timespec;
+namespace std { struct tm; }
+extern "C" int nanosleep(const struct timespec *, struct timespec *);
+
 #include "context.hpp"
 #include "device.hpp"
 #include "wsi.hpp"
