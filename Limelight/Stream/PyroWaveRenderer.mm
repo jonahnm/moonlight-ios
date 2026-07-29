@@ -469,7 +469,7 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     for (int i = 0; i < 3; i++)
         views.planes[i] = &yuvImages[i]->get_view();
 
-    if (!decoder.init(device, width, height, chroma, false)) {
+    if (!decoder.init(device, width, height, chroma, true)) {
         LogPyro(@"Decoder::init() failed");
         return false;
     }
