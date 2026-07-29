@@ -164,7 +164,7 @@ struct PyroWaveImpl {
         layer.framebufferOnly = NO;
         layer.drawableSize = view.bounds.size;
         layer.frame = view.bounds;
-        layer.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        ((CALayer *)layer).autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
         layer.opaque = YES;
         [view.layer addSublayer:layer];
         d->metalLayer = layer;
