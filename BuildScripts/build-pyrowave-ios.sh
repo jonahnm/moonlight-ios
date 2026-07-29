@@ -112,13 +112,15 @@ if [ ! -d "pyrowave" ]; then
 fi
 
 # ── CMake build ──────────────────────────────────────────────────
-echo "=== Building Granite + PyroWave for iOS arm64 ==="
-mkdir -p build-ios
-cd build-ios
+# Only run cmake if build system doesn't exist (cache miss or first build)
+if [ ! -f "build-ios/build.ninja" ]; then
+    echo "=== Configuring Granite + PyroWave for iOS arm64 ==="
+    mkdir -p build-ios
+    cd build-ios
 
-# Write wrapper CMakeLists.txt so PyroWave is NOT a top-level project.
-# This avoids building test executables (which fail on iOS) and install targets.
-cat > CMakeLists.txt << 'WRAPPER'
+    # Write wrapper CMakeLists.txt so PyroWave is NOT a top-level project.
+    # This avoids building test executables (which fail on iOS) and install targets.
+    cat > CMakeLists.txt << 'WRAPPER'
 cmake_minimum_required(VERSION 3.20)
 project(pyrowave-ios LANGUAGES CXX C)
 
@@ -137,13 +139,17 @@ add_subdirectory(${GRANITE_SOURCE_DIR} Granite)
 add_subdirectory(${PYROWAVE_SOURCE_DIR} pyrowave)
 WRAPPER
 
-cmake . -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_TOOLCHAIN_FILE="$BUILD_DIR/ios.toolchain.cmake" \
-    -DPLATFORM=OS64 \
-    -DGRANITE_SOURCE_DIR="$BUILD_DIR/Granite" \
-    -DPYROWAVE_SOURCE_DIR="$BUILD_DIR/pyrowave"
+    cmake . -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_TOOLCHAIN_FILE="$BUILD_DIR/ios.toolchain.cmake" \
+        -DPLATFORM=OS64 \
+        -DGRANITE_SOURCE_DIR="$BUILD_DIR/Granite" \
+        -DPYROWAVE_SOURCE_DIR="$BUILD_DIR/pyrowave"
 
+    cd "$BUILD_DIR"
+fi
+
+cd build-ios
 ninja -j$(sysctl -n hw.logicalcpu)
 
 # ── Copy artifacts to project libs/ ──────────────────────────────
