@@ -17,12 +17,11 @@ struct tm {
 };
 extern "C" int nanosleep(const struct timespec *, struct timespec *);
 
-// Enable Metal surface extension before Vulkan headers
+// Enable Metal surface extension and include Vulkan headers early
 #define VK_USE_PLATFORM_METAL_EXT 1
-// Alias for renamed Vulkan extension type
-#ifndef VkPhysicalDeviceFaultFeaturesKHR
-#define VkPhysicalDeviceFaultFeaturesKHR VkPhysicalDeviceFaultFeaturesEXT
-#endif
+#include <vulkan/vulkan.h>
+// Alias for renamed Vulkan extension type (EXT is defined by vulkan.h above)
+typedef VkPhysicalDeviceFaultFeaturesEXT VkPhysicalDeviceFaultFeaturesKHR;
 
 #include "context.hpp"
 #include "device.hpp"
