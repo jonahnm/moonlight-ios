@@ -85,8 +85,8 @@
 
 /* Begin PBXFileReference section */
 		983091DD24CEB69B00A0835D /* ConnectionTester.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ConnectionTester.c; sourceTree = "<group>"; };
-		9857AEEE1EBE85E10084F99E /* rs.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rs.c; path = "moonlight-common-c/nanors/rs.c"; sourceTree = "<group>"; };
-		9857AEEF1EBE85E10084F99E /* rs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = rs.h; path = "moonlight-common-c/nanors/rs.h"; sourceTree = "<group>"; };
+		9857AEEE1EBE85E10084F99E /* rs.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rs.c; path = "moonlight-common-c/reedsolomon/rs.c"; sourceTree = "<group>"; };
+		9857AEEF1EBE85E10084F99E /* rs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = rs.h; path = "moonlight-common-c/reedsolomon/rs.h"; sourceTree = "<group>"; };
 		98AB2DF01CAD422B0089BB98 /* callbacks.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = callbacks.c; sourceTree = "<group>"; };
 		98AB2DF11CAD422B0089BB98 /* ChangeLog */ = {isa = PBXFileReference; lastKnownFileType = text; path = ChangeLog; sourceTree = "<group>"; };
 		98AB2DF21CAD422B0089BB98 /* CMakeLists.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = CMakeLists.txt; sourceTree = "<group>"; };
@@ -180,13 +180,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		9857AEED1EBE85D50084F99E /* nanors */ = {
+		9857AEED1EBE85D50084F99E /* reedsolomon */ = {
 			isa = PBXGroup;
 			children = (
 				9857AEEE1EBE85E10084F99E /* rs.c */,
 				9857AEEF1EBE85E10084F99E /* rs.h */,
 			);
-			name = nanors;
+			name = reedsolomon;
 			sourceTree = "<group>";
 		};
 		98AB2DEF1CAD422B0089BB98 /* enet */ = {
@@ -500,13 +500,10 @@
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 HEADER_SEARCH_PATHS = (
 				"moonlight-common-c/enet/include",
-				"moonlight-common-c/nanors/deps/obl",
-				"moonlight-common-c/nanors/deps",
 				"../libs/**",
 			);
 				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
-				OTHER_CFLAGS = -include time.h;
-				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
+					MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = NO;
 				OTHER_LDFLAGS = "-ObjC";
@@ -534,13 +531,10 @@ HEADER_SEARCH_PATHS = (
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 HEADER_SEARCH_PATHS = (
 				"moonlight-common-c/enet/include",
-				"moonlight-common-c/nanors/deps/obl",
-				"moonlight-common-c/nanors/deps",
 				"../libs/**",
 			);
 				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
-				OTHER_CFLAGS = -include time.h;
-				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
+					MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				ONLY_ACTIVE_ARCH = NO;
 				OTHER_LDFLAGS = "-ObjC";
@@ -684,13 +678,10 @@ HEADER_SEARCH_PATHS = (
 				EXECUTABLE_PREFIX = lib;
 HEADER_SEARCH_PATHS = (
 				"moonlight-common-c/enet/include",
-				"moonlight-common-c/nanors/deps/obl",
-				"moonlight-common-c/nanors/deps",
 				"../libs/**",
 			);
 				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
-				OTHER_CFLAGS = -include time.h;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+					IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -706,13 +697,10 @@ HEADER_SEARCH_PATHS = (
 				EXECUTABLE_PREFIX = lib;
 HEADER_SEARCH_PATHS = (
 				"moonlight-common-c/enet/include",
-				"moonlight-common-c/nanors/deps/obl",
-				"moonlight-common-c/nanors/deps",
 				"../libs/**",
 			);
 				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
-				OTHER_CFLAGS = -include time.h;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+					IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
