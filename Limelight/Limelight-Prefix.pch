@@ -7,6 +7,11 @@
 #import <Availability.h>
 #include <TargetConditionals.h>
 
+// Preload Darwin.C.time module with _DARWIN_C_SOURCE for nanosleep (Xcode 15.4 workaround)
+#ifdef __cplusplus
+@import Darwin.C.time;
+#endif
+
 #ifndef __IPHONE_3_0
 #warning "This project uses features only available in iOS SDK 3.0 and later."
 #endif
