@@ -45,7 +45,7 @@ framework_paths_to_add = ['$(PROJECT_DIR)/libs/MoltenVK']
 links_to_add = %w[
   -lpyrowave -lgranite-vulkan -lgranite-math -lgranite-threading
   -lgranite-filesystem -lgranite-path -lgranite-volk -lspirv-cross-core
-  -lgranite-stb -lgranite-util -lgranite-application-global
+  -lgranite-stb -lgranite-util -lgranite-application-global -lgranite-glsl
 ]
 frameworks_to_add = %w[MoltenVK QuartzCore Metal]
 defines_to_add = %w[
