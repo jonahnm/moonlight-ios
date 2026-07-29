@@ -82,11 +82,12 @@ set(GRANITE_POSITION_INDEPENDENT ON CACHE BOOL "" FORCE)
 set(GRANITE_VULKAN_FOSSILIZE OFF CACHE BOOL "" FORCE)
 set(GRANITE_SHIPPING ON CACHE BOOL "" FORCE)
 set(GRANITE_PLATFORM "null" CACHE STRING "" FORCE)
+set(GRANITE_TOOLS OFF CACHE BOOL "" FORCE)
 set(GRANITE_VIDEO OFF CACHE BOOL "" FORCE)
 set(GRANITE_FFMPEG OFF CACHE BOOL "" FORCE)
 
-add_subdirectory(${GRANITE_SOURCE_DIR} Granite EXCLUDE_FROM_ALL)
-add_subdirectory(${PYROWAVE_SOURCE_DIR} pyrowave EXCLUDE_FROM_ALL)
+add_subdirectory(${GRANITE_SOURCE_DIR} Granite)
+add_subdirectory(${PYROWAVE_SOURCE_DIR} pyrowave)
 WRAPPER
 
 cmake . -G Ninja \
@@ -94,9 +95,7 @@ cmake . -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE="$BUILD_DIR/ios.toolchain.cmake" \
     -DPLATFORM=OS64 \
     -DGRANITE_SOURCE_DIR="$BUILD_DIR/Granite" \
-    -DPYROWAVE_SOURCE_DIR="$BUILD_DIR/pyrowave" \
-    -DVulkan_INCLUDE_DIR="$LIBS_DIR/MoltenVK/include" \
-    -DVulkan_LIBRARY="$LIBS_DIR/MoltenVK/MoltenVK.framework"
+    -DPYROWAVE_SOURCE_DIR="$BUILD_DIR/pyrowave"
 
 ninja -j$(sysctl -n hw.logicalcpu)
 
