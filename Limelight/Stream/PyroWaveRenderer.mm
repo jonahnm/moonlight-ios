@@ -9,9 +9,9 @@
 
 // Xcode 15.4 / iOS 17.5 SDK workaround: include time.h textually
 // (compiled with -fno-modules per-file to avoid broken Darwin.C.time module)
-#define _POSIX_C_SOURCE 200809L
+#define _DARWIN_C_SOURCE 1
 #include <time.h>
-#undef _POSIX_C_SOURCE
+#undef _DARWIN_C_SOURCE
 
 #include "context.hpp"
 #include "device.hpp"
