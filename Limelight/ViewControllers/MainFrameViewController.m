@@ -702,16 +702,10 @@ static NSMutableSet* hostList;
 #endif
     
     // Add PyroWave formats supported by the client decoder
+    // Temporarily disable 4:4:4 variants (HIGH10_444, HIGH8_444) due to decoder 4:2:0 output bug
+    // Only base VIDEO_FORMAT_PYROWAVE (4:2:0) works correctly
     if (app.host.serverCodecModeSupport == 0 || (app.host.serverCodecModeSupport & SCM_MASK_PYROWAVE)) {
-        if (app.host.serverCodecModeSupport == 0 || (app.host.serverCodecModeSupport & SCM_PYROWAVE_HIGH10_444)) {
-            _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE_HIGH10_444;
-        }
-        if (streamSettings.enableHdr && (AVPlayer.availableHDRModes & AVPlayerHDRModeHDR10) != 0) {
-            _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE_MAIN10;
-        }
-        if (app.host.serverCodecModeSupport == 0 || (app.host.serverCodecModeSupport & SCM_PYROWAVE_HIGH8_444)) {
-            _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE_HIGH8_444;
-        }
+        // Only enable base PyroWave (4:2:0) for now
         _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE;
     }
 
