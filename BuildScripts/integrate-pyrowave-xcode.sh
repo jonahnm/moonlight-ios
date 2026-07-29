@@ -39,6 +39,7 @@ header_paths_to_add = [
   '$(PROJECT_DIR)/libs/Granite/include',
   '$(PROJECT_DIR)/libs/PyroWave/include',
   '$(PROJECT_DIR)/libs/MoltenVK/include',
+  '$(PROJECT_DIR)/libs/SDL2/include',
 ]
 framework_paths_to_add = ['$(PROJECT_DIR)/libs/MoltenVK']
 links_to_add = %w[
