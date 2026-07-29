@@ -7,13 +7,11 @@
 #pragma push_macro("signals")
 #undef signals
 
-// Xcode 15.4 / iOS 17.5 SDK workaround: the prebuilt Darwin.C.time module
-// doesn't export nanosleep or tm. Include time.h textually with modules off.
-#pragma clang module off
+// Xcode 15.4 / iOS 17.5 SDK workaround: include time.h textually
+// (compiled with -fno-modules per-file to avoid broken Darwin.C.time module)
 #define _POSIX_C_SOURCE 200809L
 #include <time.h>
 #undef _POSIX_C_SOURCE
-#pragma clang module on
 
 #include "context.hpp"
 #include "device.hpp"

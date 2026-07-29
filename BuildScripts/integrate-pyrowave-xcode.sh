@@ -86,6 +86,15 @@ project.targets.each do |target|
   end
 end
 
+# Disable modules for PyroWaveRenderer.mm to avoid broken Darwin.C.time module
+project.targets.each do |target|
+  target.source_build_phase.files.each do |bf|
+    next unless bf.file_ref && bf.file_ref.path == 'PyroWaveRenderer.mm'
+    bf.settings ||= {}
+    bf.settings['COMPILER_FLAGS'] = '-fno-modules'
+  end
+end
+
 project.save
 puts "Successfully integrated PyroWave into Xcode project"
 RUBY
