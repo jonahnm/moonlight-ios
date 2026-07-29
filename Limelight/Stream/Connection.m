@@ -483,6 +483,9 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     // PyroWave and VT decoders both submit frames from the receive thread.
     // Without CAPABILITY_PULL_RENDERER the library calls DrSubmitDecodeUnit
     // directly from the decoder thread, which is what both decoders expect.
+    // NB: If submitDecodeUnit is left NULL here, common-c installs a fake
+    // no-op callback and every frame is silently discarded (black video).
+    _drCallbacks.submitDecodeUnit = DrSubmitDecodeUnit;
     _drCallbacks.capabilities = CAPABILITY_REFERENCE_FRAME_INVALIDATION_HEVC |
                                 CAPABILITY_REFERENCE_FRAME_INVALIDATION_AV1;
 
