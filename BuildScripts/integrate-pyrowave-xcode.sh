@@ -50,7 +50,7 @@ frameworks_to_add = %w[MoltenVK QuartzCore Metal]
 defines_to_add = %w[
   HAVE_PYROWAVE=1 GRANITE_VULKAN_SYSTEM_HANDLES=1
   GRANITE_VULKAN_SPIRV_CROSS=1 PYROWAVE_PRECISION=1
-
+  _LIBCPP_HAS_NO_WIDE_CHARACTERS=1
 ]
 
 project.targets.each do |target|
