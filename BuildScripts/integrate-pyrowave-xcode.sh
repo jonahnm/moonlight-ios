@@ -93,6 +93,7 @@ end
 
 # Add MoltenVK.framework to Embed Frameworks phase
 moltenvk_path = File.join(ENV['PROJECT_DIR'], 'libs', 'MoltenVK', 'MoltenVK.framework')
+# Always embed if MoltenVK.framework exists (it's restored from cache)
 if File.directory?(moltenvk_path)
   # Find or create the Embed Frameworks build phase
   embed_phase = nil
