@@ -46,7 +46,7 @@ links_to_add = %w[
   -lpyrowave -lgranite-vulkan -lgranite-math -lgranite-threading
   -lgranite-filesystem -lgranite-path -lgranite-volk -lspirv-cross-core
   -lgranite-stb -lgranite-util -lgranite-application-global
-  -framework MoltenVK
+  -framework MoltenVK -framework QuartzCore -framework Metal
 ]
 defines_to_add = %w[
   HAVE_PYROWAVE=1 GRANITE_VULKAN_SYSTEM_HANDLES=1
@@ -74,6 +74,7 @@ project.targets.each do |target|
     ld = (config.build_settings['OTHER_LDFLAGS'] || [])
     ld = ld.split if ld.is_a?(String)
     links_to_add.each { |l| ld << l unless ld.include?(l) }
+    ld << '$(inherited)' unless ld.include?('$(inherited)')
     ld << '-all_load' unless ld.include?('-all_load')
     config.build_settings['OTHER_LDFLAGS'] = ld
 
