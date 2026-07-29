@@ -1,0 +1,21 @@
+// PyroWave decoder build settings for iOS
+// Include this in your Xcode project's configurations
+
+// Preprocessor macros
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) HAVE_PYROWAVE=1 GRANITE_VULKAN_SYSTEM_HANDLES=1 GRANITE_VULKAN_SPIRV_CROSS=1 PYROWAVE_PRECISION=1
+
+// Header search paths for Granite, PyroWave, and MoltenVK
+HEADER_SEARCH_PATHS = $(inherited) "$(PROJECT_DIR)/libs/Granite/include" "$(PROJECT_DIR)/libs/PyroWave/include" "$(PROJECT_DIR)/libs/MoltenVK/include"
+
+// Library search paths for Granite and PyroWave static libs
+LIBRARY_SEARCH_PATHS = $(inherited) "$(PROJECT_DIR)/libs/Granite/lib" "$(PROJECT_DIR)/libs/PyroWave/lib"
+
+// Framework search paths for MoltenVK.framework
+FRAMEWORK_SEARCH_PATHS = $(inherited) "$(PROJECT_DIR)/libs/MoltenVK"
+
+// Linker flags: Granite static libs, PyroWave, MoltenVK framework, and system libs
+OTHER_LDFLAGS = $(inherited) -lpyrowave -lgranite-vulkan -lgranite-math -lgranite-threading -lgranite-filesystem -lgranite-path -lgranite-volk -lspirv-cross-core -lgranite-stb -lgranite-util -lgranite-application-global -framework MoltenVK
+
+// C++ standard requirements
+CLANG_CXX_LANGUAGE_STANDARD = c++17
+CLANG_CXX_LIBRARY = libc++
