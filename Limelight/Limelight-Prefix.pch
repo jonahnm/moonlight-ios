@@ -11,6 +11,14 @@
 #warning "This project uses features only available in iOS SDK 3.0 and later."
 #endif
 
+// PyroWave constants (pending upstream moonlight-common-c merge)
+#ifndef SCM_MASK_PYROWAVE
+#define SCM_PYROWAVE            0x01000000
+#define SCM_PYROWAVE_HIGH8_444  0x02000000
+#define SCM_PYROWAVE_HIGH10_444 0x04000000
+#define SCM_MASK_PYROWAVE (SCM_PYROWAVE | SCM_PYROWAVE_HIGH8_444 | SCM_PYROWAVE_HIGH10_444)
+#endif
+
 #ifdef __OBJC__
 
 #if TARGET_OS_IPHONE
