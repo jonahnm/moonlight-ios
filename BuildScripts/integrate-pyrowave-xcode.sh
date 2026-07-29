@@ -77,6 +77,12 @@ project.targets.each do |target|
     config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
     config.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
 
+    cxx_flags = (config.build_settings['OTHER_CPLUSPLUSFLAGS'] || ['$(inherited)'])
+    cxx_flags = cxx_flags.split if cxx_flags.is_a?(String)
+    cxx_flags << '$(inherited)' unless cxx_flags.include?('$(inherited)')
+    cxx_flags << '-fcxx-modules' unless cxx_flags.include?('-fcxx-modules')
+    config.build_settings['OTHER_CPLUSPLUSFLAGS'] = cxx_flags
+
     gcc = (config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)'])
     gcc = gcc.split if gcc.is_a?(String)
     gcc << '$(inherited)' unless gcc.include?('$(inherited)')

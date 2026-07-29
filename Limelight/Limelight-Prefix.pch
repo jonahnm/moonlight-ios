@@ -19,12 +19,6 @@
 #define SCM_MASK_PYROWAVE (SCM_PYROWAVE | SCM_PYROWAVE_HIGH8_444 | SCM_PYROWAVE_HIGH10_444)
 #endif
 
-// Ensure POSIX time symbols are visible before C++ STL headers process
-// (iOS 17.5 SDK + Xcode 15.4 workaround for ObjC++ compilation)
-#ifdef __cplusplus
-#include <time.h>
-#endif
-
 #ifdef __OBJC__
 
 #if TARGET_OS_IPHONE
