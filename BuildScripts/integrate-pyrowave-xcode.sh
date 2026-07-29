@@ -46,8 +46,8 @@ links_to_add = %w[
   -lpyrowave -lgranite-vulkan -lgranite-math -lgranite-threading
   -lgranite-filesystem -lgranite-path -lgranite-volk -lspirv-cross-core
   -lgranite-stb -lgranite-util -lgranite-application-global
-  -framework MoltenVK -framework QuartzCore -framework Metal
 ]
+frameworks_to_add = %w[MoltenVK QuartzCore Metal]
 defines_to_add = %w[
   HAVE_PYROWAVE=1 GRANITE_VULKAN_SYSTEM_HANDLES=1
   GRANITE_VULKAN_SPIRV_CROSS=1 PYROWAVE_PRECISION=1
@@ -73,9 +73,12 @@ project.targets.each do |target|
 
     ld = (config.build_settings['OTHER_LDFLAGS'] || [])
     ld = ld.split if ld.is_a?(String)
-    links_to_add.each { |l| ld << l unless ld.include?(l) }
     ld << '$(inherited)' unless ld.include?('$(inherited)')
-    ld << '-all_load' unless ld.include?('-all_load')
+    links_to_add.each { |l| ld << l unless ld.include?(l) }
+    frameworks_to_add.each do |fw|
+      pair = ['-framework', fw]
+      ld.concat(pair) unless ld.each_cons(2).include?(pair)
+    end
     config.build_settings['OTHER_LDFLAGS'] = ld
 
     config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
