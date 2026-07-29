@@ -155,7 +155,10 @@ fi
 # Granite static libs (from the build tree)
 find . -name "*.a" -exec cp {} "$LIBS_DIR/Granite/lib/" \;
 # Granite headers (hpp/h from source, preserving tree)
-rsync -a --include='*/' --include='*.hpp' --include='*.h' --exclude='*' "$BUILD_DIR/Granite/" "$LIBS_DIR/Granite/include/"
+rsync -a --include='*/' --include='*.hpp' --include='*.h' --exclude='*' \
+  "$BUILD_DIR/Granite/" "$LIBS_DIR/Granite/include/"
+# Remove msinttypes/ which shadows system stdint.h on Apple platforms
+rm -rf "$LIBS_DIR/Granite/include/third_party/rapidjson/include/rapidjson/msinttypes"
 
 echo "=== Build complete ==="
 echo "Libraries placed in:"
