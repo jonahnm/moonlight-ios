@@ -1,0 +1,138 @@
+name: Build iOS IPA with PyroWave
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      scheme:
+        description: Xcode scheme
+        default: Moonlight
+        type: choice
+        options:
+          - Moonlight
+          - Moonlight TV
+      configuration:
+        description: Build configuration
+        default: Release
+        type: choice
+        options:
+          - Debug
+          - Release
+      signing:
+        description: Code signing
+        default: unsigned
+        type: choice
+        options:
+          - unsigned
+          - automatic
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    env:
+      SCHEME: ${{ github.event.inputs.scheme || 'Moonlight' }}
+      CONFIGURATION: ${{ github.event.inputs.configuration || 'Release' }}
+      SIGNING: ${{ github.event.inputs.signing || 'unsigned' }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          brew install cmake ninja
+          gem install xcodeproj
+
+      - name: Build PyroWave dependencies (Granite + PyroWave + MoltenVK)
+        run: bash BuildScripts/build-pyrowave-ios.sh
+
+      - name: Integrate PyroWave into Xcode project
+        run: bash BuildScripts/integrate-pyrowave-xcode.sh
+
+      - name: Build archive
+        run: |
+          SIGN_ARGS=()
+          if [ "$SIGNING" = "automatic" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            SIGN_ARGS=(
+              DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
+              -allowProvisioningUpdates
+            )
+          else
+            SIGN_ARGS=(
+              CODE_SIGN_IDENTITY=""
+              CODE_SIGNING_REQUIRED=NO
+              CODE_SIGNING_ALLOWED=NO
+            )
+          fi
+
+          xcodebuild archive \
+            -project Moonlight.xcodeproj \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -sdk iphoneos \
+            -archivePath "$RUNNER_TEMP/Moonlight.xcarchive" \
+            "${SIGN_ARGS[@]}"
+
+      - name: Package IPA
+        run: |
+          if [ "$SIGNING" = "automatic" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            mkdir -p "$RUNNER_TEMP/export"
+            cat > "$RUNNER_TEMP/export/exportOptions.plist" << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>method</key>
+  <string>development</string>
+  <key>signingStyle</key>
+  <string>automatic</string>
+  <key>teamID</key>
+  <string>${APPLE_TEAM_ID}</string>
+</dict>
+</plist>
+PLIST
+
+            xcodebuild -exportArchive \
+              -archivePath "$RUNNER_TEMP/Moonlight.xcarchive" \
+              -exportPath "$GITHUB_WORKSPACE/build" \
+              -exportOptionsPlist "$RUNNER_TEMP/export/exportOptions.plist" \
+              -allowProvisioningUpdates
+
+            # xcodebuild places the IPA inside the export dir named <scheme>.ipa
+            # Rename it to include configuration for artifact clarity
+            if [ -f "$GITHUB_WORKSPACE/build/$SCHEME.ipa" ]; then
+              mv "$GITHUB_WORKSPACE/build/$SCHEME.ipa" \
+                 "$GITHUB_WORKSPACE/build/Moonlight-$CONFIGURATION-signed.ipa"
+            fi
+          else
+            # Map scheme to product name
+            if [ "$SCHEME" = "Moonlight TV" ]; then
+              APP_NAME="Moonlight TV"
+            else
+              APP_NAME="Moonlight"
+            fi
+
+            mkdir -p "$GITHUB_WORKSPACE/build/Payload"
+            cp -R "$RUNNER_TEMP/Moonlight.xcarchive/Products/Applications/$APP_NAME.app" \
+                  "$GITHUB_WORKSPACE/build/Payload/"
+            cd "$GITHUB_WORKSPACE/build"
+            zip -r "Moonlight-$CONFIGURATION-unsigned.ipa" Payload/
+            rm -rf Payload/
+          fi
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Moonlight-${{ github.event.inputs.scheme || 'Moonlight' }}-${{ github.event.inputs.configuration || 'Release' }}
+          path: build/*.ipa
+          if-no-files-found: error
