@@ -8,10 +8,10 @@
 #undef signals
 
 // Xcode 15.4 / iOS 17.5 SDK workaround: the prebuilt Darwin.C.time module
-// doesn't export nanosleep or tm. Forward-declare them directly.
-struct timespec;
-struct tm;
-extern "C" int nanosleep(const struct timespec *, struct timespec *);
+// doesn't export nanosleep or tm. Include time.h textually with modules off.
+#pragma clang module off
+#include <time.h>
+#pragma clang module on
 
 #include "context.hpp"
 #include "device.hpp"
