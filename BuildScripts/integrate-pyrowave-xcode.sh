@@ -21,7 +21,7 @@ stream_group = main_group['Moonlight']['Stream'] || begin
   sg
 end
 
-files_to_add = ['PyroWaveRenderer.h', 'PyroWaveRenderer.mm', 'PyroWaveShaders.h', 'PyroWaveGLSLStubs.mm']
+files_to_add = ['PyroWaveRenderer.h', 'PyroWaveRenderer.mm', 'PyroWaveShaders.h']
 files_to_add.each do |f|
   file_ref = stream_group.new_file(f)
   project.targets.each do |target|
