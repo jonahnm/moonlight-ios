@@ -3,6 +3,7 @@
 #import "StreamView.h"
 
 #include <QuartzCore/CAMetalLayer.h>
+#include <SDL.h>
 
 #pragma push_macro("signals")
 #undef signals
