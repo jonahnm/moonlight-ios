@@ -701,15 +701,15 @@ static NSMutableSet* hostList;
     }
 #endif
     
-    // Add PyroWave formats if the server supports them
-    if (app.host.serverCodecModeSupport & SCM_MASK_PYROWAVE) {
-        if (app.host.serverCodecModeSupport & SCM_PYROWAVE_HIGH10_444) {
+    // Add PyroWave formats supported by the client decoder
+    if (app.host.serverCodecModeSupport == 0 || (app.host.serverCodecModeSupport & SCM_MASK_PYROWAVE)) {
+        if (app.host.serverCodecModeSupport == 0 || (app.host.serverCodecModeSupport & SCM_PYROWAVE_HIGH10_444)) {
             _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE_HIGH10_444;
         }
         if (streamSettings.enableHdr && (AVPlayer.availableHDRModes & AVPlayerHDRModeHDR10) != 0) {
             _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE_MAIN10;
         }
-        if (app.host.serverCodecModeSupport & SCM_PYROWAVE_HIGH8_444) {
+        if (app.host.serverCodecModeSupport == 0 || (app.host.serverCodecModeSupport & SCM_PYROWAVE_HIGH8_444)) {
             _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE_HIGH8_444;
         }
         _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE;

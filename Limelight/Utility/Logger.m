@@ -57,5 +57,11 @@ void LogTagv(LogLevel level, NSString* tag, NSString* fmt, va_list args) {
     } else {
         prefixedString = [NSString stringWithFormat:@"%@ %@", levelPrefix, fmt];
     }
+
+    va_list args_copy;
+    va_copy(args_copy, args);
+    vfprintf(stderr, [prefixedString stringByAppendingString:@"\n"].UTF8String, args_copy);
+    va_end(args_copy);
+
     NSLogv(prefixedString, args);
 }

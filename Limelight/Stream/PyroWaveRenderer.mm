@@ -10,11 +10,8 @@
 
 // Xcode 15.4 / iOS 17.5 SDK workaround: the prebuilt Darwin.C.time module
 // doesn't export nanosleep or struct tm. Provide them directly.
-struct tm {
-  int tm_sec; int tm_min; int tm_hour; int tm_mday; int tm_mon;
-  int tm_year; int tm_wday; int tm_yday; int tm_isdst;
-  long tm_gmtoff; const char *tm_zone;
-};
+// struct tm is defined via :: (from module) and ctime imports it to std::.
+// No need to define it ourselves.
 extern "C" int nanosleep(const struct timespec *, struct timespec *);
 
 // Enable Metal surface extension and use Granite's Vulkan header wrapper
@@ -146,6 +143,14 @@ struct PyroWaveImpl {
     bool init_decoder(PyroWave::ChromaSubsampling c);
 };
 
+static void LogPyro(NSString *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    NSString *msg = [NSString stringWithFormat:@"[PyroWave] %@\n", fmt];
+    vfprintf(stderr, msg.UTF8String, args);
+    va_end(args);
+}
+
 @implementation PyroWaveRenderer {
     std::unique_ptr<PyroWaveImpl> d;
     int _videoFormat;
@@ -159,14 +164,20 @@ struct PyroWaveImpl {
         d->view = view;
         _stopped = false;
 
+        CGFloat scale = [UIScreen mainScreen].nativeScale;
         CAMetalLayer *layer = [CAMetalLayer layer];
         layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
         layer.framebufferOnly = NO;
-        layer.drawableSize = view.bounds.size;
+        layer.contentsScale = scale;
         layer.frame = view.bounds;
+        layer.drawableSize = CGSizeMake(view.bounds.size.width * scale, view.bounds.size.height * scale);
         layer.opaque = YES;
         [view.layer addSublayer:layer];
         d->metalLayer = layer;
+
+        LogPyro(@"initWithView bounds=%.0fx%.0f scale=%.1f drawable=%.0fx%.0f",
+                view.bounds.size.width, view.bounds.size.height, scale,
+                layer.drawableSize.width, layer.drawableSize.height);
     }
     return self;
 }
@@ -176,6 +187,7 @@ struct PyroWaveImpl {
     d->videoFormat = videoFormat;
     d->width = videoWidth;
     d->height = videoHeight;
+    LogPyro(@"setupWithVideoFormat format=0x%x width=%d height=%d", videoFormat, videoWidth, videoHeight);
 }
 
 - (BOOL)isReady {
@@ -187,8 +199,19 @@ struct PyroWaveImpl {
 
     claimGraniteThread();
 
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        if (self->d->metalLayer && self->d->view) {
+            CGFloat scale = [UIScreen mainScreen].nativeScale;
+            self->d->metalLayer.frame = self->d->view.bounds;
+            self->d->metalLayer.contentsScale = scale;
+            self->d->metalLayer.drawableSize = CGSizeMake(self->d->view.bounds.size.width * scale, self->d->view.bounds.size.height * scale);
+        }
+    });
+
+    LogPyro(@"Initializing Vulkan context (%dx%d)...", d->width, d->height);
+
     if (!Context::init_loader(nullptr)) {
-        NSLog(@"PyroWave: Vulkan loader init failed");
+        LogPyro(@"Vulkan loader init failed");
         return NO;
     }
 
@@ -200,7 +223,7 @@ struct PyroWaveImpl {
     ContextHandle ctx = Util::make_handle<Context>();
     if (!ctx->init_instance_and_device(iext.data(), (uint32_t)iext.size(), dext, 1,
                                        CONTEXT_CREATION_ENABLE_PUSH_DESCRIPTOR_BIT)) {
-        NSLog(@"PyroWave: Granite Vulkan context init failed");
+        LogPyro(@"Granite Vulkan context init failed");
         return NO;
     }
 
@@ -209,11 +232,11 @@ struct PyroWaveImpl {
     d->wsi.set_backbuffer_format(BackbufferFormat::UNORM);
 
     if (!d->wsi.init_from_existing_context(std::move(ctx))) {
-        NSLog(@"PyroWave: WSI context init failed");
+        LogPyro(@"WSI context init failed");
         return NO;
     }
     if (!d->wsi.init_device()) {
-        NSLog(@"PyroWave: WSI device init failed");
+        LogPyro(@"WSI device init failed");
         return NO;
     }
     d->device = &d->wsi.get_device();
@@ -222,12 +245,12 @@ struct PyroWaveImpl {
         fullscreen_vert_spv, sizeof(fullscreen_vert_spv),
         yuv2rgb_frag_spv, sizeof(yuv2rgb_frag_spv));
     if (!d->present_program) {
-        NSLog(@"PyroWave: present program creation failed");
+        LogPyro(@"Present program creation failed");
         return NO;
     }
 
     d->initialized = true;
-    NSLog(@"PyroWave: Vulkan context ready %dx%d", d->width, d->height);
+    LogPyro(@"Vulkan context ready %dx%d", d->width, d->height);
     return YES;
 }
 
@@ -238,6 +261,7 @@ struct PyroWaveImpl {
 
     if (!d->initialized) {
         if (![self initializeDecoder]) {
+            LogPyro(@"initializeDecoder failed");
             return DR_NEED_IDR;
         }
     }
@@ -260,11 +284,15 @@ struct PyroWaveImpl {
     }
 
     if (!d->decoder_ready) {
-        if (frameLen < sizeof(PyroWave::BitstreamSequenceHeader))
+        if (frameLen < sizeof(PyroWave::BitstreamSequenceHeader)) {
+            LogPyro(@"frameLen %zu < header %zu, requesting IDR", frameLen, sizeof(PyroWave::BitstreamSequenceHeader));
             return DR_NEED_IDR;
+        }
         auto *seq = (const PyroWave::BitstreamSequenceHeader *)frameData;
-        if (!seq->extended)
+        if (!seq->extended) {
+            LogPyro(@"Bitstream sequence header missing extended flag, requesting IDR");
             return DR_NEED_IDR;
+        }
 
         auto detected = (seq->chroma_resolution == PyroWave::CHROMA_RESOLUTION_444)
                             ? PyroWave::ChromaSubsampling::Chroma444
@@ -273,14 +301,22 @@ struct PyroWaveImpl {
         d->full_range = seq->ycbcr_range == PyroWave::YCBCR_RANGE_FULL;
         d->is_hdr = seq->transfer_function == PyroWave::TRANSFER_FUNCTION_PQ;
 
-        if (!d->init_swapchain(d->is_hdr))
+        LogPyro(@"IDR sequence header detected: chroma=%s hdr=%d bt2020=%d full_range=%d",
+                (detected == PyroWave::ChromaSubsampling::Chroma444) ? "4:4:4" : "4:2:0",
+                d->is_hdr, d->bt2020, d->full_range);
+
+        if (!d->init_swapchain(d->is_hdr)) {
+            LogPyro(@"init_swapchain failed");
             return DR_NEED_IDR;
-        if (!d->init_decoder(detected))
+        }
+        if (!d->init_decoder(detected)) {
+            LogPyro(@"init_decoder failed");
             return DR_NEED_IDR;
+        }
     }
 
     if (!d->decoder.push_packet(frameData, frameLen)) {
-        NSLog(@"PyroWave: push_packet() failed");
+        LogPyro(@"push_packet() failed");
         d->decoder.clear();
         return DR_NEED_IDR;
     }
@@ -288,13 +324,15 @@ struct PyroWaveImpl {
     if (!d->decoder.decode_is_ready(false))
         return DR_OK;
 
-    if (!d->wsi.begin_frame())
+    if (!d->wsi.begin_frame()) {
+        LogPyro(@"wsi.begin_frame() returned false");
         return DR_OK;
+    }
 
     auto cmd = d->device->request_command_buffer();
 
     if (!d->decoder.decode(*cmd, d->views)) {
-        NSLog(@"PyroWave: decode() failed");
+        LogPyro(@"decode() failed");
         d->device->submit(cmd);
         d->wsi.end_frame();
         return DR_NEED_IDR;
@@ -352,15 +390,15 @@ bool PyroWaveImpl::init_swapchain(bool want_hdr) {
     wsi.set_backbuffer_format(want_hdr ? BackbufferFormat::HDR10 : BackbufferFormat::UNORM);
     if (!wsi.init_surface_swapchain()) {
         if (want_hdr) {
-            NSLog(@"PyroWave: HDR10 swapchain failed, retrying SDR");
+            LogPyro(@"HDR10 swapchain failed, retrying SDR");
             wsi.set_backbuffer_format(BackbufferFormat::UNORM);
             if (!wsi.init_surface_swapchain()) {
-                NSLog(@"PyroWave: swapchain init failed");
+                LogPyro(@"swapchain init failed");
                 return false;
             }
             is_hdr = false;
         } else {
-            NSLog(@"PyroWave: swapchain init failed");
+            LogPyro(@"swapchain init failed");
             return false;
         }
     }
@@ -383,18 +421,18 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     yuvImages[1] = device->create_image(info);
     yuvImages[2] = device->create_image(info);
     if (!yuvImages[0] || !yuvImages[1] || !yuvImages[2]) {
-        NSLog(@"PyroWave: failed to allocate YCbCr plane images");
+        LogPyro(@"Failed to allocate YCbCr plane images");
         return false;
     }
     for (int i = 0; i < 3; i++)
         views.planes[i] = &yuvImages[i]->get_view();
 
     if (!decoder.init(device, width, height, chroma, true)) {
-        NSLog(@"PyroWave: Decoder::init() failed");
+        LogPyro(@"Decoder::init() failed");
         return false;
     }
 
-    NSLog(@"PyroWave decoder ready %dx%d chroma=%s hdr=%d bt2020=%d full_range=%d",
+    LogPyro(@"Decoder ready %dx%d chroma=%s hdr=%d bt2020=%d full_range=%d",
           width, height,
           (c == PyroWave::ChromaSubsampling::Chroma444) ? "4:4:4" : "4:2:0",
           is_hdr, bt2020, full_range);

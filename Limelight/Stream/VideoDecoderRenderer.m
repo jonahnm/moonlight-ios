@@ -99,6 +99,8 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     self->videoFormat = videoFormat;
     self->frameRate = frameRate;
     
+    Log(LOG_I, @"VideoDecoderRenderer setup with format 0x%x (%dx%d @ %d FPS)", videoFormat, videoWidth, videoHeight, frameRate);
+
     if (videoFormat & VIDEO_FORMAT_MASK_PYROWAVE) {
         // Remove the unused AVSampleBufferDisplayLayer
         [displayLayer removeFromSuperlayer];
@@ -388,6 +390,9 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         int ret = [_pyroRenderer submitDecodeUnit:du];
         if (du->frameType == FRAME_TYPE_IDR && ret == DR_OK) {
             [self->_callbacks videoContentShown];
+        }
+        if (bufferType == BUFFER_TYPE_PICDATA) {
+            free(data);
         }
         return ret;
     }
