@@ -402,14 +402,18 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     return true;
 }
 
-// Stub for Granite::GLSLCompiler methods (class defined by existing Granite headers)
+// Stub for Granite::GLSLCompiler (forward-declared but not defined in headers)
 namespace Granite {
-GLSLCompiler::GLSLCompiler(FilesystemInterface &) {}
-void GLSLCompiler::set_source_from_file(const std::string &, Stage) {}
-void GLSLCompiler::set_include_directories(const std::vector<std::string> *) {}
-uint64_t GLSLCompiler::get_source_hash() const { return 0; }
-bool GLSLCompiler::compile(std::string &,
-                           const std::vector<std::pair<std::string, int>> *) const {
-  return false;
-}
+enum class Stage { Vertex, Fragment, Compute };
+class GLSLCompiler {
+public:
+  GLSLCompiler(FilesystemInterface &) {}
+  void set_source_from_file(const std::string &, Stage) {}
+  void set_include_directories(const std::vector<std::string> *) {}
+  uint64_t get_source_hash() const { return 0; }
+  bool compile(std::string &,
+               const std::vector<std::pair<std::string, int>> *) const {
+    return false;
+  }
+};
 } // namespace Granite
