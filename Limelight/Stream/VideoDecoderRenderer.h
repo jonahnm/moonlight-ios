@@ -9,6 +9,7 @@
 @import AVFoundation;
 
 #import "ConnectionCallbacks.h"
+#import "PyroWaveRenderer.h"
 
 #include "Limelight.h"
 

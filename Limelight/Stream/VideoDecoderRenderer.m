@@ -25,6 +25,7 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     float _streamAspectRatio;
     
     AVSampleBufferDisplayLayer* displayLayer;
+    PyroWaveRenderer* _pyroRenderer;
     int videoFormat;
     int frameRate;
     
@@ -97,53 +98,29 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
 {
     self->videoFormat = videoFormat;
     self->frameRate = frameRate;
+    
+    if (videoFormat & VIDEO_FORMAT_MASK_PYROWAVE) {
+        // Remove the unused AVSampleBufferDisplayLayer
+        [displayLayer removeFromSuperlayer];
+        _pyroRenderer = [[PyroWaveRenderer alloc] initWithView:_view];
+        [_pyroRenderer setupWithVideoFormat:videoFormat width:videoWidth height:videoHeight];
+    }
 }
 
 - (void)start
 {
-    _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
-    if (@available(iOS 15.0, tvOS 15.0, *)) {
-        _displayLink.preferredFrameRateRange = CAFrameRateRangeMake(self->frameRate, self->frameRate, self->frameRate);
-    }
-    else {
-        _displayLink.preferredFramesPerSecond = self->frameRate;
-    }
-    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSDefaultRunLoopMode];
-}
-
-// TODO: Refactor this
-int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
-
-- (void)displayLinkCallback:(CADisplayLink *)sender
-{
-    VIDEO_FRAME_HANDLE handle;
-    PDECODE_UNIT du;
-    
-    while (LiPollNextVideoFrame(&handle, &du)) {
-        LiCompleteVideoFrame(handle, DrSubmitDecodeUnit(du));
-        
-        if (framePacing) {
-            // Calculate the actual display refresh rate
-            double displayRefreshRate = 1 / (_displayLink.targetTimestamp - _displayLink.timestamp);
-            
-            // Only pace frames if the display refresh rate is >= 90% of our stream frame rate.
-            // Battery saver, accessibility settings, or device thermals can cause the actual
-            // refresh rate of the display to drop below the physical maximum.
-            if (displayRefreshRate >= frameRate * 0.9f) {
-                // Keep one pending frame to smooth out gaps due to
-                // network jitter at the cost of 1 frame of latency
-                if (LiGetPendingVideoFrames() == 1) {
-                    break;
-                }
-            }
-        }
-    }
+    // Frames arrive via DrSubmitDecodeUnit from the decoder thread.
+    // No display link needed for this mode.
 }
 
 - (void)stop
 {
     [_displayLink invalidate];
+    [_pyroRenderer stop];
 }
+
+// TODO: Refactor this
+int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 
 #define NALU_START_PREFIX_SIZE 3
 #define NAL_LENGTH_PREFIX_SIZE 4
@@ -406,6 +383,15 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 {
     OSStatus status;
     
+    // PyroWave uses its own decoder path
+    if (videoFormat & VIDEO_FORMAT_MASK_PYROWAVE) {
+        int ret = [_pyroRenderer submitDecodeUnit:decodeUnit];
+        if (du->frameType == FRAME_TYPE_IDR && ret == DR_OK) {
+            [self->_callbacks videoContentShown];
+        }
+        return ret;
+    }
+    
     // Construct a new format description object each time we receive an IDR frame
     if (du->frameType == FRAME_TYPE_IDR) {
         if (bufferType != BUFFER_TYPE_PICDATA) {
@@ -502,6 +488,9 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             
             Log(LOG_I, @"Constructing new AV1 format description");
             formatDesc = [self createAV1FormatDescriptionForIDRFrame:fullFrameData];
+        }
+        else if (videoFormat & VIDEO_FORMAT_MASK_PYROWAVE) {
+            // PyroWave decodes and presents via its own rendering path
         }
         else {
             // Unsupported codec!
@@ -614,6 +603,9 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 }
 
 - (void)setHdrMode:(BOOL)enabled {
+    if (_pyroRenderer) {
+        [_pyroRenderer setHdrMode:enabled];
+    }
     SS_HDR_METADATA hdrMetadata;
     
     BOOL hasMetadata = enabled && LiGetHdrMetadata(&hdrMetadata);

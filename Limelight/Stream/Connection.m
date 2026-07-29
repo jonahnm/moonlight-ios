@@ -104,6 +104,24 @@ void DrStop(void)
             else {
                 return @"AV1 10-bit SDR";
             }
+        case VIDEO_FORMAT_PYROWAVE:
+            return @"PyroWave";
+        case VIDEO_FORMAT_PYROWAVE_MAIN10:
+            if (LiGetCurrentHostDisplayHdrMode()) {
+                return @"PyroWave Main 10 HDR";
+            }
+            else {
+                return @"PyroWave Main 10 SDR";
+            }
+        case VIDEO_FORMAT_PYROWAVE_HIGH8_444:
+            return @"PyroWave High 4:4:4";
+        case VIDEO_FORMAT_PYROWAVE_HIGH10_444:
+            if (LiGetCurrentHostDisplayHdrMode()) {
+                return @"PyroWave High 4:4:4 HDR";
+            }
+            else {
+                return @"PyroWave High 4:4:4 SDR";
+            }
         default:
             return @"UNKNOWN";
     }
@@ -448,8 +466,10 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _drCallbacks.setup = DrDecoderSetup;
     _drCallbacks.start = DrStart;
     _drCallbacks.stop = DrStop;
-    _drCallbacks.capabilities = CAPABILITY_PULL_RENDERER |
-                                CAPABILITY_REFERENCE_FRAME_INVALIDATION_HEVC |
+    // PyroWave and VT decoders both submit frames from the receive thread.
+    // Without CAPABILITY_PULL_RENDERER the library calls DrSubmitDecodeUnit
+    // directly from the decoder thread, which is what both decoders expect.
+    _drCallbacks.capabilities = CAPABILITY_REFERENCE_FRAME_INVALIDATION_HEVC |
                                 CAPABILITY_REFERENCE_FRAME_INVALIDATION_AV1;
 
     LiInitializeAudioCallbacks(&_arCallbacks);
