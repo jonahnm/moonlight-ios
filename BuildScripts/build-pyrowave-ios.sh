@@ -146,7 +146,7 @@ echo "=== Copying libraries ==="
 mkdir -p "$LIBS_DIR/PyroWave/lib" "$LIBS_DIR/PyroWave/include"
 mkdir -p "$LIBS_DIR/Granite/lib" "$LIBS_DIR/Granite/include"
 
-cp libpyrowave.a "$LIBS_DIR/PyroWave/lib/libpyrowave.a"
+cp pyrowave/libpyrowave.a "$LIBS_DIR/PyroWave/lib/libpyrowave.a"
 # PyroWave headers (if any *.hpp in the pyrowave source root)
 if ls "$BUILD_DIR/pyrowave"/*.hpp &>/dev/null; then
     cp "$BUILD_DIR/pyrowave"/*.hpp "$LIBS_DIR/PyroWave/include/"
