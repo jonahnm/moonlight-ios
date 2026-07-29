@@ -53,8 +53,9 @@ jobs:
           brew install cmake ninja
           gem install xcodeproj
 
-      - name: Cache PyroWave build (sources + build tree + libs)
-        uses: actions/cache@v4
+      - name: Restore PyroWave cache
+        id: pyrowave-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             /tmp/pyrowave-ios-build
@@ -65,6 +66,17 @@ jobs:
 
       - name: Build PyroWave dependencies (Granite + PyroWave + MoltenVK)
         run: bash BuildScripts/build-pyrowave-ios.sh
+
+      - name: Save PyroWave cache (only if build succeeded)
+        uses: actions/cache/save@v4
+        if: steps.pyrowave-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            /tmp/pyrowave-ios-build
+            libs/Granite
+            libs/PyroWave
+            libs/MoltenVK
+          key: pyrowave-${{ hashFiles('BuildScripts/build-pyrowave-ios.sh') }}
 
       - name: Integrate PyroWave into Xcode project
         run: bash BuildScripts/integrate-pyrowave-xcode.sh
