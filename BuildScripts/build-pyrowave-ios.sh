@@ -157,8 +157,9 @@ find . -name "*.a" -exec cp {} "$LIBS_DIR/Granite/lib/" \;
 # Granite headers (hpp/h from source, preserving tree)
 rsync -a --include='*/' --include='*.hpp' --include='*.h' --exclude='*' \
   "$BUILD_DIR/Granite/" "$LIBS_DIR/Granite/include/"
-# Remove msinttypes/ which shadows system stdint.h on Apple platforms
+# Remove third-party headers that shadow Apple system headers
 rm -rf "$LIBS_DIR/Granite/include/third_party/rapidjson/include/rapidjson/msinttypes"
+rm -rf "$LIBS_DIR/Granite/include/third_party/dirent"
 
 echo "=== Build complete ==="
 echo "Libraries placed in:"
