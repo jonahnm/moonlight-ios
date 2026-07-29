@@ -499,8 +499,9 @@
 				DEVELOPMENT_TEAM = DM46QST4M7;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				HEADER_SEARCH_PATHS = (
-					"moonlight-common-c/enet/include",
-					"../libs/**",
+"moonlight-common-c/enet/include",
+				"moonlight-common-c/nanors/deps/obl",
+				"../libs/**",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MTL_ENABLE_DEBUG_INFO = YES;
@@ -529,8 +530,9 @@
 				DEVELOPMENT_TEAM = DM46QST4M7;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				HEADER_SEARCH_PATHS = (
-					"moonlight-common-c/enet/include",
-					"../libs/**",
+"moonlight-common-c/enet/include",
+				"moonlight-common-c/nanors/deps/obl",
+				"../libs/**",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MTL_ENABLE_DEBUG_INFO = NO;
@@ -675,8 +677,9 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				EXECUTABLE_PREFIX = lib;
 				HEADER_SEARCH_PATHS = (
-					"moonlight-common-c/enet/include",
-					"../libs/**",
+"moonlight-common-c/enet/include",
+				"moonlight-common-c/nanors/deps/obl",
+				"../libs/**",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
@@ -693,8 +696,9 @@
 				CODE_SIGN_IDENTITY = "iPhone Distribution";
 				EXECUTABLE_PREFIX = lib;
 				HEADER_SEARCH_PATHS = (
-					"moonlight-common-c/enet/include",
-					"../libs/**",
+"moonlight-common-c/enet/include",
+				"moonlight-common-c/nanors/deps/obl",
+				"../libs/**",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
