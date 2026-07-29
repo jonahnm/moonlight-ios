@@ -12,7 +12,6 @@ GRANITE_REV="094adec89cbdb4f29ecaf858ed944a53ebe9d18a"
 PYROWAVE_REV="217366d4d772eb800150fa57e703da295605d63f"
 PYROWAVE_REPO="https://github.com/Themaister/pyrowave.git"
 GRANITE_REPO="https://github.com/Themaister/Granite.git"
-MOLTENVK_URL="https://github.com/KhronosGroup/MoltenVK/releases/download/v${MOLTENVK_VERSION}/MoltenVK-${MOLTENVK_VERSION}.tar.gz"
 IOS_CMAKE_REPO="https://github.com/leetal/ios-cmake.git"
 
 BUILD_DIR="/tmp/pyrowave-ios-build"
@@ -27,15 +26,24 @@ if [ ! -f "ios.toolchain.cmake" ]; then
 fi
 
 # ── MoltenVK ─────────────────────────────────────────────────────
-if [ ! -d "MoltenVK" ]; then
+if [ ! -d "moltenvk-extract" ]; then
     echo "=== Fetching MoltenVK ${MOLTENVK_VERSION} ==="
-    curl -L "$MOLTENVK_URL" -o moltenvk.tar.gz
-    tar xzf moltenvk.tar.gz
+    curl -L "https://github.com/KhronosGroup/MoltenVK/releases/download/v${MOLTENVK_VERSION}/MoltenVK-ios.tar" -o moltenvk.tar
+    mkdir -p moltenvk-extract
+    tar xf moltenvk.tar -C moltenvk-extract
 fi
-MOLTENVK_DIR="$BUILD_DIR/MoltenVK"
 mkdir -p "$LIBS_DIR/MoltenVK/include"
-cp -R "$MOLTENVK_DIR/MoltenVK.xcframework/ios-arm64/MoltenVK.framework" "$LIBS_DIR/MoltenVK/"
-cp -R "$MOLTENVK_DIR/Include/" "$LIBS_DIR/MoltenVK/include/"
+# Find MoltenVK.framework for ios-arm64 regardless of archive structure
+FW="$(find "$BUILD_DIR/moltenvk-extract" -path "*/ios-arm64/MoltenVK.framework" -type d | head -1)"
+if [ -z "$FW" ]; then
+    echo "ERROR: MoltenVK.framework for ios-arm64 not found in archive"
+    exit 1
+fi
+cp -R "$FW" "$LIBS_DIR/MoltenVK/"
+# Copy Include directory if present
+if [ -d "$BUILD_DIR/moltenvk-extract/Include" ]; then
+    cp -R "$BUILD_DIR/moltenvk-extract/Include/" "$LIBS_DIR/MoltenVK/include/"
+fi
 
 # ── Granite ──────────────────────────────────────────────────────
 if [ ! -d "Granite" ]; then
