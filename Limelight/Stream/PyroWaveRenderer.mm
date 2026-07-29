@@ -358,6 +358,8 @@ static void LogPyro(NSString *fmt, ...) {
     if (!d->decoder.decode_is_ready(false))
         return DR_OK;
 
+    LogPyro(@"frame %u: decode_is_ready, begin_frame", du->frameNumber);
+
     if (!d->wsi.begin_frame()) {
         LogPyro(@"wsi.begin_frame() returned false");
         return DR_OK;
@@ -371,6 +373,8 @@ static void LogPyro(NSString *fmt, ...) {
         d->wsi.end_frame();
         return DR_NEED_IDR;
     }
+
+    LogPyro(@"frame %u: decode done, presenting", du->frameNumber);
 
     cmd->begin_render_pass(d->device->get_swapchain_render_pass(SwapchainRenderPass::ColorOnly));
     cmd->set_quad_state();
@@ -388,6 +392,7 @@ static void LogPyro(NSString *fmt, ...) {
 
     d->device->submit(cmd);
     d->wsi.end_frame();
+    LogPyro(@"frame %u: presented", du->frameNumber);
     return DR_OK;
 }
 
