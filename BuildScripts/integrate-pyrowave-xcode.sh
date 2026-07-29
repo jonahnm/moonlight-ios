@@ -91,6 +91,32 @@ project.targets.each do |target|
   end
 end
 
+# Add MoltenVK.framework to Embed Frameworks phase
+moltenvk_path = File.join(ENV['PROJECT_DIR'], 'libs', 'MoltenVK', 'MoltenVK.framework')
+if File.directory?(moltenvk_path)
+  # Find or create the Embed Frameworks build phase
+  embed_phase = nil
+  project.targets.first.build_phases.each do |bp|
+    if bp.isa == 'PBXCopyFilesBuildPhase' && bp.name == 'Embed Frameworks'
+      embed_phase = bp
+      break
+    end
+  end
+  unless embed_phase
+    embed_phase = project.new(Xcodeproj::Project::PBXCopyFilesBuildPhase)
+    embed_phase.name = 'Embed Frameworks'
+    embed_phase.dst_subfolder_spec = 10  # frameworks
+    project.targets.first.build_phases << embed_phase
+  end
+  # Add framework file ref if not already present
+  ref = project.frameworks_group.files.find { |f| f.path == 'MoltenVK.framework' }
+  unless ref
+    ref = project.frameworks_group.new_file('libs/MoltenVK/MoltenVK.framework')
+    project.targets.first.frameworks_build_phase.add_file_reference(ref)
+  end
+  embed_phase.add_file_reference(ref) unless embed_phase.files_references.include?(ref)
+end
+
 project.save
 puts "Successfully integrated PyroWave into Xcode project"
 RUBY
