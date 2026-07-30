@@ -397,7 +397,7 @@ static void LogPyro(NSString *fmt, ...) {
     cmd->set_program(d->present_program);
     cmd->set_texture(0, 0, *d->views.planes[0]);
     cmd->set_texture(1, 0, *d->views.planes[1]);
-    cmd->set_texture(2, 0, *d->views.planes[2]);
+    cmd->set_texture(2, 0, *d->views.planes[1]);
     cmd->set_sampler(3, 0, StockSampler::LinearClamp);
     cmd->set_specialization_constant_mask(0x7);
     cmd->set_specialization_constant(0, d->full_range);
