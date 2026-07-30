@@ -194,14 +194,17 @@ static void LogPyro(NSString *fmt, ...) {
         _stopped = false;
 
         CGFloat scale = [UIScreen mainScreen].nativeScale;
-        CAMetalLayer *layer = [CAMetalLayer layer];
-        layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
-        layer.framebufferOnly = NO;
-        layer.contentsScale = scale;
-        layer.frame = view.bounds;
-        layer.drawableSize = CGSizeMake(view.bounds.size.width * scale, view.bounds.size.height * scale);
-        layer.opaque = YES;
-        [view.layer addSublayer:layer];
+        __block CAMetalLayer *layer = nil;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            layer = [CAMetalLayer layer];
+            layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+            layer.framebufferOnly = NO;
+            layer.contentsScale = scale;
+            layer.frame = view.bounds;
+            layer.drawableSize = CGSizeMake(view.bounds.size.width * scale, view.bounds.size.height * scale);
+            layer.opaque = YES;
+            [view.layer addSublayer:layer];
+        });
         d->metalLayer = layer;
 
         LogPyro(@"initWithView bounds=%.0fx%.0f scale=%.1f drawable=%.0fx%.0f",
