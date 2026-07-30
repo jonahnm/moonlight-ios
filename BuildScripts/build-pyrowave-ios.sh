@@ -108,6 +108,29 @@ if [ ! -d "pyrowave" ]; then
     git remote add origin "$PYROWAVE_REPO"
     git fetch --depth 1 origin "$PYROWAVE_REV"
     git checkout FETCH_HEAD -q
+
+    # Patch: 4:2:0 fragment iDWT horizontal pass needs 3 color attachments.
+    # The horizontal shader (idwt_fs[2], CHROMA_CONFIG=2) has 3 outputs
+    # (oY at loc 0, oCb at loc 1, oCr at loc 2) but the render pass only
+    # had 2 attachments, so oCr was discarded (Cr plane never written).
+    python3 << 'PYEOF'
+old = '''			rp_info.store_attachments = 0x3;
+			rp_info.num_color_attachments = 2;'''
+new = '''			rp_info.store_attachments = 0x3;
+			// HORIZONTAL pass needs 3 attachments for 4:2:0 (Y + Cb + Cr separate)
+			// VERTICAL pass uses 2 attachments (Y + CbCr interleaved)
+			rp_info.num_color_attachments = 3;'''
+import sys
+with open('pyrowave_decoder.cpp') as f:
+    content = f.read()
+if old not in content:
+    print('ERROR: Pattern not found in pyrowave_decoder.cpp', file=sys.stderr)
+    sys.exit(1)
+content = content.replace(old, new, 1)
+with open('pyrowave_decoder.cpp', 'w') as f:
+    f.write(content)
+print('Patched pyrowave_decoder.cpp: 3 color attachments for chroma iDWT')
+PYEOF
     cd "$BUILD_DIR"
 fi
 
