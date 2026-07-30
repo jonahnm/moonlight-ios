@@ -387,12 +387,17 @@ static void LogPyro(NSString *fmt, ...) {
 
     LogPyro(@"frame %u: decode done, presenting", du->frameNumber);
 
+    cmd->barrier(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                 VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                 VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                 VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+
     cmd->begin_render_pass(d->device->get_swapchain_render_pass(SwapchainRenderPass::ColorOnly));
     cmd->set_quad_state();
     cmd->set_program(d->present_program);
     cmd->set_texture(0, 0, *d->views.planes[0]);
-    cmd->set_texture(0, 1, *d->views.planes[0]);
-    cmd->set_texture(0, 2, *d->views.planes[0]);
+    cmd->set_texture(0, 1, *d->views.planes[1]);
+    cmd->set_texture(0, 2, *d->views.planes[2]);
     cmd->set_sampler(0, 3, StockSampler::LinearClamp);
     cmd->set_specialization_constant_mask(0x7);
     cmd->set_specialization_constant(0, d->full_range);
