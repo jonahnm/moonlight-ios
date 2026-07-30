@@ -111,8 +111,34 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
 
 - (void)start
 {
-    // Frames arrive via DrSubmitDecodeUnit from the decoder thread.
-    // No display link needed for this mode.
+    _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
+    if (@available(iOS 15.0, tvOS 15.0, *)) {
+        _displayLink.preferredFrameRateRange = CAFrameRateRangeMake(self->frameRate, self->frameRate, self->frameRate);
+    }
+    else {
+        _displayLink.preferredFramesPerSecond = self->frameRate;
+    }
+    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSDefaultRunLoopMode];
+}
+
+- (void)displayLinkCallback:(CADisplayLink *)sender
+{
+    VIDEO_FRAME_HANDLE handle;
+    PDECODE_UNIT du;
+    
+    while (LiPollNextVideoFrame(&handle, &du)) {
+        LiCompleteVideoFrame(handle, DrSubmitDecodeUnit(du));
+        
+        if (self->framePacing) {
+            double displayRefreshRate = 1 / (_displayLink.targetTimestamp - _displayLink.timestamp);
+            
+            if (displayRefreshRate >= self->frameRate * 0.9f) {
+                if (LiGetPendingVideoFrames() == 1) {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 - (void)stop

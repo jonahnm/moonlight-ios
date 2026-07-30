@@ -480,13 +480,13 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _drCallbacks.setup = DrDecoderSetup;
     _drCallbacks.start = DrStart;
     _drCallbacks.stop = DrStop;
-    // PyroWave and VT decoders both submit frames from the receive thread.
-    // Without CAPABILITY_PULL_RENDERER the library calls DrSubmitDecodeUnit
-    // directly from the decoder thread, which is what both decoders expect.
-    // NB: If submitDecodeUnit is left NULL here, common-c installs a fake
-    // no-op callback and every frame is silently discarded (black video).
+    // Frame submission: the renderer's CADisplayLink pulls frames via
+    // LiPollNextVideoFrame and submits them through DrSubmitDecodeUnit.
+    // Keep submitDecodeUnit assigned for PyroWave's decoder-thread push path
+    // (CAPABILITY_PULL_RENDERER + submitDecodeUnit set = fallback allowed).
     _drCallbacks.submitDecodeUnit = DrSubmitDecodeUnit;
-    _drCallbacks.capabilities = CAPABILITY_REFERENCE_FRAME_INVALIDATION_HEVC |
+    _drCallbacks.capabilities = CAPABILITY_PULL_RENDERER |
+                                CAPABILITY_REFERENCE_FRAME_INVALIDATION_HEVC |
                                 CAPABILITY_REFERENCE_FRAME_INVALIDATION_AV1;
 
     LiInitializeAudioCallbacks(&_arCallbacks);
