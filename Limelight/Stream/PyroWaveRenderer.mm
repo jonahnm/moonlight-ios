@@ -378,17 +378,14 @@ static void LogPyro(NSString *fmt, ...) {
 
     auto cmd = d->device->request_command_buffer();
 
-    // Transition YUV planes from UNDEFINED to layouts needed by decoder + present.
-    // Frag path writes to planes[0] as color attachment in final pass,
-    // also writes to planes[1]/[2] as color attachments in extraction pass.
-    // After decode, we sample from these as textures.
+    // Transition YUV planes to COLOR_ATTACHMENT_OPTIMAL for the decoder's render pass writes.
     cmd->begin_barrier_batch();
     for (int i = 0; i < 3; i++) {
         cmd->image_barrier(*d->yuvImages[i], VK_IMAGE_LAYOUT_UNDEFINED,
-                           VK_IMAGE_LAYOUT_GENERAL,
+                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
-                           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+                           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
     }
     cmd->end_barrier_batch();
 
@@ -399,25 +396,15 @@ static void LogPyro(NSString *fmt, ...) {
         return DR_NEED_IDR;
     }
     
-    // DEBUG: overwrite Y plane with solid 0.5 to test view chain
-    {
-        VkClearValue fillValue = {};
-        fillValue.color.float32[0] = 0.5f;
-        fillValue.color.float32[1] = 0.0f;
-        fillValue.color.float32[2] = 0.0f;
-        fillValue.color.float32[3] = 1.0f;
-        cmd->clear_image(*d->yuvImages[0], fillValue);
-    }
-
     LogPyro(@"frame %u: decode done, presenting", du->frameNumber);
 
     cmd->begin_barrier_batch();
     for (int i = 0; i < 3; i++) {
         cmd->image_barrier(*d->yuvImages[i],
-                           VK_IMAGE_LAYOUT_GENERAL,
+                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                            VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
-                           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                            VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     }
