@@ -80,12 +80,6 @@
     if (codecSupportStr != nil) {
         _config.serverCodecModeSupport = [codecSupportStr intValue];
         if (_config.serverCodecModeSupport & SCM_MASK_PYROWAVE) {
-            if (_config.serverCodecModeSupport & SCM_PYROWAVE_HIGH10_444) {
-                _config.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE_HIGH10_444;
-            }
-            if (_config.serverCodecModeSupport & SCM_PYROWAVE_HIGH8_444) {
-                _config.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE_HIGH8_444;
-            }
             _config.supportedVideoFormats |= VIDEO_FORMAT_PYROWAVE;
         }
     }
