@@ -398,6 +398,16 @@ static void LogPyro(NSString *fmt, ...) {
         d->wsi.end_frame();
         return DR_NEED_IDR;
     }
+    
+    // DEBUG: overwrite Y plane with solid 0.5 to test view chain
+    {
+        VkClearColorValue fillColor = {};
+        fillColor.float32[0] = 0.5f;
+        fillColor.float32[1] = 0.0f;
+        fillColor.float32[2] = 0.0f;
+        fillColor.float32[3] = 1.0f;
+        cmd->clear_image(*d->yuvImages[0], fillColor);
+    }
 
     LogPyro(@"frame %u: decode done, presenting", du->frameNumber);
 
