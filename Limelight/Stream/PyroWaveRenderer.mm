@@ -392,19 +392,23 @@ static void LogPyro(NSString *fmt, ...) {
                  VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
-    // DEBUG: Skip YUV textures, just draw magenta to verify swapchain pipeline.
-    // If magenta shows up: swapchain works, issue is in YUV content.
-    // If still green: swapchain or CametalLayer is not our rendering surface.
+    // DEBUG: Render Y-only as red to verify decoder writes Y plane.
+    // If you see red image: Y plane is filled correctly by decoder.
+    // If black: Y plane is empty / decoder not writing to views.planes[0].
     {
         auto rp_info = d->device->get_swapchain_render_pass(SwapchainRenderPass::ColorOnly);
-        // Set clear color to magenta (1, 0, 1, 1)
-        rp_info.clear_color[0].float32[0] = 1.0f;
+        rp_info.clear_color[0].float32[0] = 0.0f;
         rp_info.clear_color[0].float32[1] = 0.0f;
-        rp_info.clear_color[0].float32[2] = 1.0f;
+        rp_info.clear_color[0].float32[2] = 0.0f;
         rp_info.clear_color[0].float32[3] = 1.0f;
         cmd->begin_render_pass(rp_info);
+        cmd->set_quad_state();
+        cmd->set_program(d->device->request_program(fullscreen_vert_spv, sizeof(fullscreen_vert_spv),
+                                                     debug_y2r_frag_spv, sizeof(debug_y2r_frag_spv)));
+        cmd->set_texture(0, 0, *d->views.planes[0]);
+        cmd->set_sampler(0, 3, StockSampler::LinearClamp);
+        cmd->draw(3);
     }
-    // Don't draw — just clear to magenta
     cmd->end_render_pass();
 
     d->device->submit(cmd);
