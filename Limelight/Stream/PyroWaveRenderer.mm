@@ -231,14 +231,19 @@ static void LogPyro(NSString *fmt, ...) {
 
     claimGraniteThread();
 
-    dispatch_sync(dispatch_get_main_queue(), ^{
+    void (^updateLayer)(void) = ^{
         if (self->d->metalLayer && self->d->view) {
             CGFloat scale = [UIScreen mainScreen].nativeScale;
             self->d->metalLayer.frame = self->d->view.bounds;
             self->d->metalLayer.contentsScale = scale;
             self->d->metalLayer.drawableSize = CGSizeMake(self->d->view.bounds.size.width * scale, self->d->view.bounds.size.height * scale);
         }
-    });
+    };
+    if ([NSThread isMainThread]) {
+        updateLayer();
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), updateLayer);
+    }
 
     LogPyro(@"Initializing Vulkan context (%dx%d)...", d->width, d->height);
 
