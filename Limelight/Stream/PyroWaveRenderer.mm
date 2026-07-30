@@ -489,7 +489,9 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     chromaW = (c == PyroWave::ChromaSubsampling::Chroma420) ? width >> 1 : width;
     chromaH = (c == PyroWave::ChromaSubsampling::Chroma420) ? height >> 1 : height;
 
-    VkFormat plane_format = is_hdr ? VK_FORMAT_R16_UNORM : VK_FORMAT_R8_UNORM;
+    // Use R16_UNORM for both SDR and HDR — R8_UNORM may not support
+    // VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT on MoltenVK, breaking compute path.
+    VkFormat plane_format = VK_FORMAT_R16_UNORM;
     ImageCreateInfo info = ImageCreateInfo::immutable_2d_image(width, height, plane_format);
     info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
                  VK_IMAGE_USAGE_STORAGE_BIT;
