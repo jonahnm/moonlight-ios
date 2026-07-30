@@ -389,9 +389,15 @@ static void LogPyro(NSString *fmt, ...) {
 
     cmd->begin_render_pass(d->device->get_swapchain_render_pass(SwapchainRenderPass::ColorOnly));
     cmd->set_quad_state();
-    cmd->set_program(d->device->request_program(
-        fullscreen_vert_spv, sizeof(fullscreen_vert_spv),
-        red_test_frag_spv, red_test_frag_spv_len));
+    cmd->set_program(d->present_program);
+    cmd->set_texture(0, 0, *d->views.planes[0]);
+    cmd->set_texture(0, 1, *d->views.planes[0]);
+    cmd->set_texture(0, 2, *d->views.planes[0]);
+    cmd->set_sampler(0, 3, StockSampler::LinearClamp);
+    cmd->set_specialization_constant_mask(0x7);
+    cmd->set_specialization_constant(0, d->full_range);
+    cmd->set_specialization_constant(1, d->bt2020);
+    cmd->set_specialization_constant(2, d->is_hdr);
     cmd->draw(3);
     cmd->end_render_pass();
 
