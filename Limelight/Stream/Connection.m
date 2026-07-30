@@ -480,11 +480,11 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _drCallbacks.setup = DrDecoderSetup;
     _drCallbacks.start = DrStart;
     _drCallbacks.stop = DrStop;
-    // Frame submission: the renderer's CADisplayLink pulls frames via
-    // LiPollNextVideoFrame and submits them through DrSubmitDecodeUnit.
-    // Keep submitDecodeUnit assigned for PyroWave's decoder-thread push path
-    // (CAPABILITY_PULL_RENDERER + submitDecodeUnit set = fallback allowed).
-    _drCallbacks.submitDecodeUnit = DrSubmitDecodeUnit;
+    // Frame submission: the renderer's CADisplayLink runs on the main thread,
+    // polls frames via LiPollNextVideoFrame, and submits through C function
+    // DrSubmitDecodeUnit directly. submitDecodeUnit is left NULL since the
+    // displayLink drives frame submission, not common-c's internal push path.
+    // Common-c rejects CAPABILITY_PULL_RENDERER + submitDecodeUnit combined.
     _drCallbacks.capabilities = CAPABILITY_PULL_RENDERER |
                                 CAPABILITY_REFERENCE_FRAME_INVALIDATION_HEVC |
                                 CAPABILITY_REFERENCE_FRAME_INVALIDATION_AV1;
