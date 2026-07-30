@@ -489,9 +489,8 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     chromaW = (c == PyroWave::ChromaSubsampling::Chroma420) ? width >> 1 : width;
     chromaH = (c == PyroWave::ChromaSubsampling::Chroma420) ? height >> 1 : height;
 
-    // Use R16_UNORM for both SDR and HDR — R8_UNORM may not support
-    // VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT on MoltenVK, breaking compute path.
-    VkFormat plane_format = VK_FORMAT_R16_UNORM;
+    // Use R16_SFLOAT — Apple GPUs don't support STORAGE_IMAGE for R8_UNORM/R16_UNORM.
+    VkFormat plane_format = VK_FORMAT_R16_SFLOAT;
     ImageCreateInfo info = ImageCreateInfo::immutable_2d_image(width, height, plane_format);
     info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
                  VK_IMAGE_USAGE_STORAGE_BIT;
