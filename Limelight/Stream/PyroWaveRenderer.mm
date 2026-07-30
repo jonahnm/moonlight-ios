@@ -378,6 +378,20 @@ static void LogPyro(NSString *fmt, ...) {
 
     auto cmd = d->device->request_command_buffer();
 
+    // Transition YUV planes from UNDEFINED to layouts needed by decoder + present.
+    // Frag path writes to planes[0] as color attachment in final pass,
+    // also writes to planes[1]/[2] as color attachments in extraction pass.
+    // After decode, we sample from these as textures.
+    cmd->begin_barrier_batch();
+    for (int i = 0; i < 3; i++) {
+        cmd->image_barrier(*d->yuvImages[i], VK_IMAGE_LAYOUT_UNDEFINED,
+                           VK_IMAGE_LAYOUT_GENERAL,
+                           VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    }
+    cmd->end_barrier_batch();
+
     if (!d->decoder.decode(*cmd, d->views)) {
         LogPyro(@"decode() failed");
         d->device->submit(cmd);
@@ -387,10 +401,17 @@ static void LogPyro(NSString *fmt, ...) {
 
     LogPyro(@"frame %u: decode done, presenting", du->frameNumber);
 
-    cmd->barrier(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                 VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                 VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                 VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    cmd->begin_barrier_batch();
+    for (int i = 0; i < 3; i++) {
+        cmd->image_barrier(*d->yuvImages[i],
+                           VK_IMAGE_LAYOUT_GENERAL,
+                           VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
+                           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                           VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                           VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    }
+    cmd->end_barrier_batch();
 
     // DEBUG: Render Y-only as red to verify decoder writes Y plane.
     // If you see red image: Y plane is filled correctly by decoder.
