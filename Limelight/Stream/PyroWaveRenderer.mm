@@ -392,18 +392,19 @@ static void LogPyro(NSString *fmt, ...) {
                  VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
-    cmd->begin_render_pass(d->device->get_swapchain_render_pass(SwapchainRenderPass::ColorOnly));
-    cmd->set_quad_state();
-    cmd->set_program(d->present_program);
-    cmd->set_texture(0, 0, *d->views.planes[0]);
-    cmd->set_texture(0, 1, *d->views.planes[1]);
-    cmd->set_texture(0, 2, *d->views.planes[2]);
-    cmd->set_sampler(0, 3, StockSampler::LinearClamp);
-    cmd->set_specialization_constant_mask(0x7);
-    cmd->set_specialization_constant(0, d->full_range);
-    cmd->set_specialization_constant(1, d->bt2020);
-    cmd->set_specialization_constant(2, d->is_hdr);
-    cmd->draw(3);
+    // DEBUG: Skip YUV textures, just draw magenta to verify swapchain pipeline.
+    // If magenta shows up: swapchain works, issue is in YUV content.
+    // If still green: swapchain or CametalLayer is not our rendering surface.
+    {
+        auto rp_info = d->device->get_swapchain_render_pass(SwapchainRenderPass::ColorOnly);
+        // Set clear color to magenta (1, 0, 1, 1)
+        rp_info.clear_color[0].float32[0] = 1.0f;
+        rp_info.clear_color[0].float32[1] = 0.0f;
+        rp_info.clear_color[0].float32[2] = 1.0f;
+        rp_info.clear_color[0].float32[3] = 1.0f;
+        cmd->begin_render_pass(rp_info);
+    }
+    // Don't draw — just clear to magenta
     cmd->end_render_pass();
 
     d->device->submit(cmd);
