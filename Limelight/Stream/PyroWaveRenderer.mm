@@ -463,8 +463,8 @@ bool PyroWaveImpl::init_swapchain(bool want_hdr) {
 
 bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     chroma = c;
-    chromaW = (c == PyroWave::ChromaSubsampling::Chroma420) ? width >> 1 : width;
-    chromaH = (c == PyroWave::ChromaSubsampling::Chroma420) ? height >> 1 : height;
+    chromaW = (c == PyroWave::ChromaSubsampling::Chroma420) ? width >> 2 : width;
+    chromaH = (c == PyroWave::ChromaSubsampling::Chroma420) ? height >> 2 : height;
 
     VkFormat plane_format = is_hdr ? VK_FORMAT_R16_UNORM : VK_FORMAT_R8_UNORM;
     ImageCreateInfo info = ImageCreateInfo::immutable_2d_image(width, height, plane_format);
