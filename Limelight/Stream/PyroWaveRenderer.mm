@@ -247,6 +247,11 @@ static void LogPyro(NSString *fmt, ...) {
 
     LogPyro(@"Initializing Vulkan context (%dx%d)...", d->width, d->height);
 
+    // Enable MoltenVK debug logging to capture shader compilation errors
+    setenv("MVK_DEBUG", "1", 1);
+    setenv("MVK_LOG_LEVEL", "3", 1);
+    setenv("MVK_LOG_CPU_SYNCHRONIZATION", "1", 1);
+
     PFN_vkGetInstanceProcAddr gipa = loadMoltenVKGIPA();
     if (!gipa) {
         LogPyro(@"Failed to locate MoltenVK vkGetInstanceProcAddr (embedded framework missing?)");
