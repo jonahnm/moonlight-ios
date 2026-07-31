@@ -2,7 +2,6 @@
 #import "PyroWaveShaders.h"
 #import "StreamView.h"
 
-#import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <SDL.h>
 
@@ -32,24 +31,6 @@ typedef VkPhysicalDeviceFaultFeaturesEXT VkPhysicalDeviceFaultFeaturesKHR;
 #endif
 
 #include <dlfcn.h>
-
-// MoltenVK interop function pointer types
-typedef void (*PFN_vkGetMTLDeviceMVK)(VkPhysicalDevice, void **);
-typedef void (*PFN_vkGetMTLTextureMVK)(VkImage, void **);
-
-// MSL source: fills a 2D texture with a constant float value
-static const char *kFillTextureMSL =
-    "#include <metal_stdlib>\n"
-    "using namespace metal;\n"
-    "kernel void fill_texture(\n"
-    "    texture2d<float, access::write> tex [[texture(0)]],\n"
-    "    constant float &value [[buffer(0)]],\n"
-    "    uint2 gid [[thread_position_in_grid]])\n"
-    "{\n"
-    "    if (gid.x < tex.get_width() && gid.y < tex.get_height()) {\n"
-    "        tex.write(float4(value), gid);\n"
-    "    }\n"
-    "}\n";
 
 // Returns MoltenVK's real vkGetInstanceProcAddr entry point.
 //
@@ -86,6 +67,7 @@ static PFN_vkGetInstanceProcAddr loadMoltenVKGIPA(void) {
 #include <cstring>
 #include <vector>
 #include <memory>
+#include <atomic>
 
 using namespace Vulkan;
 
@@ -135,8 +117,6 @@ public:
             VK_KHR_SURFACE_EXTENSION_NAME,
             VK_EXT_METAL_SURFACE_EXTENSION_NAME,
             "VK_KHR_get_physical_device_properties2",
-            // Enables vkGetMTLDeviceMVK / vkGetMTLTextureMVK interop functions.
-            "VK_MVK_moltenvk",
         };
     }
 
@@ -188,19 +168,11 @@ struct PyroWaveImpl {
     PyroWave::ViewBuffers views;
     Program *present_program = nullptr;
 
-    std::vector<uint8_t> packetScratch;
+    // Number of frames queued on the render thread (for bounding queue depth).
+    std::atomic<int> pendingFrames{0};
 
     bool init_swapchain(bool want_hdr);
     bool init_decoder(PyroWave::ChromaSubsampling c);
-
-    // Metal interop for fallback decode
-    id<MTLDevice> mtlDevice = nil;
-    id<MTLCommandQueue> mtlQueue = nil;
-    id<MTLComputePipelineState> mtlFillPipeline = nil;
-
-    bool initMetal();
-    void fillYUVWithMetal(float yVal, float uvVal);
-    void cleanupMetal();
 };
 
 static void LogPyro(NSString *fmt, ...) {
@@ -217,6 +189,7 @@ static void LogPyro(NSString *fmt, ...) {
     std::unique_ptr<PyroWaveImpl> d;
     int _videoFormat;
     bool _stopped;
+    dispatch_queue_t _renderQueue;
 }
 
 - (id)initWithView:(UIView*)view {
@@ -225,6 +198,7 @@ static void LogPyro(NSString *fmt, ...) {
         d = std::make_unique<PyroWaveImpl>();
         d->view = view;
         _stopped = false;
+        _renderQueue = dispatch_queue_create("com.moonlight.pyrowave.render", DISPATCH_QUEUE_SERIAL);
 
         CGFloat scale = [UIScreen mainScreen].nativeScale;
         __block CAMetalLayer *layer = nil;
@@ -272,18 +246,12 @@ static void LogPyro(NSString *fmt, ...) {
             self->d->metalLayer.drawableSize = CGSizeMake(self->d->view.bounds.size.width * scale, self->d->view.bounds.size.height * scale);
         }
     };
-    if ([NSThread isMainThread]) {
-        updateLayer();
-    } else {
-        dispatch_sync(dispatch_get_main_queue(), updateLayer);
-    }
+    // Async: a synchronous hop to the main queue could deadlock with stop()'s
+    // dispatch_sync(renderQueue) drain. The layer size was already set in
+    // initWithView; this is just a refresh.
+    dispatch_async(dispatch_get_main_queue(), updateLayer);
 
     LogPyro(@"Initializing Vulkan context (%dx%d)...", d->width, d->height);
-
-    // Enable MoltenVK debug logging to capture shader compilation errors
-    setenv("MVK_DEBUG", "1", 1);
-    setenv("MVK_LOG_LEVEL", "3", 1);
-    setenv("MVK_LOG_CPU_SYNCHRONIZATION", "1", 1);
 
     PFN_vkGetInstanceProcAddr gipa = loadMoltenVKGIPA();
     if (!gipa) {
@@ -332,17 +300,51 @@ static void LogPyro(NSString *fmt, ...) {
         return NO;
     }
 
-    // Initialize Metal interop for fallback fill of YUV planes
-    if (!d->initMetal()) {
-        LogPyro(@"Metal interop init failed — will rely on GPU decoder");
-    }
-
     d->initialized = true;
     LogPyro(@"Vulkan context ready %dx%d", d->width, d->height);
     return YES;
 }
 
 - (int)submitDecodeUnit:(PDECODE_UNIT)du {
+    if (_stopped) return DR_OK;
+
+    // Bound the render queue: drop frames if the background decoder is
+    // backed up, so we never accumulate unbounded frame data.
+    if (d->pendingFrames.load(std::memory_order_relaxed) >= 4) {
+        return DR_OK;
+    }
+
+    // Copy the frame payload now. du is freed by LiCompleteVideoFrame()
+    // immediately after this method returns, so it must not be touched
+    // asynchronously.
+    NSData *frameData;
+    if (du->bufferList->next == nullptr) {
+        frameData = [NSData dataWithBytes:du->bufferList->data
+                                   length:du->bufferList->length];
+    } else {
+        NSMutableData *mutableData = [NSMutableData dataWithCapacity:du->fullLength];
+        for (PLENTRY entry = du->bufferList; entry != nullptr; entry = entry->next) {
+            [mutableData appendBytes:entry->data length:entry->length];
+        }
+        frameData = mutableData;
+    }
+    uint32_t frameNumber = du->frameNumber;
+
+    d->pendingFrames.fetch_add(1, std::memory_order_relaxed);
+    dispatch_async(_renderQueue, ^{
+        int result = [self processDecodeUnit:frameData frameNumber:frameNumber];
+        d->pendingFrames.fetch_sub(1, std::memory_order_relaxed);
+        if (result == DR_NEED_IDR) {
+            LiRequestIdrFrame();
+        }
+    });
+
+    return DR_OK;
+}
+
+// Runs on the serial render queue (background thread). All decode and
+// present work happens here so the main thread is never blocked.
+- (int)processDecodeUnit:(NSData *)frameData frameNumber:(uint32_t)frameNumber {
     claimGraniteThread();
 
     if (_stopped) return DR_OK;
@@ -354,29 +356,15 @@ static void LogPyro(NSString *fmt, ...) {
         }
     }
 
-    const uint8_t *frameData;
-    size_t frameLen;
-
-    if (du->bufferList->next == nullptr) {
-        frameData = (const uint8_t *)du->bufferList->data;
-        frameLen = (size_t)du->bufferList->length;
-    } else {
-        d->packetScratch.clear();
-        d->packetScratch.reserve((size_t)du->fullLength);
-        for (PLENTRY entry = du->bufferList; entry != nullptr; entry = entry->next) {
-            const uint8_t *p = (const uint8_t *)entry->data;
-            d->packetScratch.insert(d->packetScratch.end(), p, p + entry->length);
-        }
-        frameData = d->packetScratch.data();
-        frameLen = d->packetScratch.size();
-    }
+    const uint8_t *bytes = (const uint8_t *)frameData.bytes;
+    size_t frameLen = frameData.length;
 
     if (!d->decoder_ready) {
         if (frameLen < sizeof(PyroWave::BitstreamSequenceHeader)) {
             LogPyro(@"frameLen %zu < header %zu, requesting IDR", frameLen, sizeof(PyroWave::BitstreamSequenceHeader));
             return DR_NEED_IDR;
         }
-        auto *seq = (const PyroWave::BitstreamSequenceHeader *)frameData;
+        auto *seq = (const PyroWave::BitstreamSequenceHeader *)bytes;
         if (!seq->extended) {
             LogPyro(@"Bitstream sequence header missing extended flag, requesting IDR");
             return DR_NEED_IDR;
@@ -403,7 +391,7 @@ static void LogPyro(NSString *fmt, ...) {
         }
     }
 
-    if (!d->decoder.push_packet(frameData, frameLen)) {
+    if (!d->decoder.push_packet(bytes, frameLen)) {
         LogPyro(@"push_packet() failed");
         d->decoder.clear();
         return DR_NEED_IDR;
@@ -412,7 +400,7 @@ static void LogPyro(NSString *fmt, ...) {
     if (!d->decoder.decode_is_ready(false))
         return DR_OK;
 
-    LogPyro(@"frame %u: decode_is_ready, begin_frame", du->frameNumber);
+    LogPyro(@"frame %u: decode_is_ready, begin_frame", frameNumber);
 
     if (!d->wsi.begin_frame()) {
         LogPyro(@"wsi.begin_frame() returned false");
@@ -448,12 +436,16 @@ static void LogPyro(NSString *fmt, ...) {
 
     d->device->submit(cmd);
     d->wsi.end_frame();
-    LogPyro(@"frame %u: presented", du->frameNumber);
+    LogPyro(@"frame %u: presented", frameNumber);
     return DR_OK;
 }
 
 - (void)stop {
     _stopped = true;
+    // Drain any frames still queued on the render thread before tearing down.
+    if (_renderQueue) {
+        dispatch_sync(_renderQueue, ^{});
+    }
     claimGraniteThread();
     if (d->device) {
         d->device->wait_idle();
@@ -461,7 +453,6 @@ static void LogPyro(NSString *fmt, ...) {
     for (auto &img : d->yuvImages) {
         img.reset();
     }
-    d->cleanupMetal();
     if (d->metalLayer) {
         [d->metalLayer removeFromSuperlayer];
         d->metalLayer = nil;
@@ -478,6 +469,10 @@ static void LogPyro(NSString *fmt, ...) {
 
 - (int)decoderColorRange {
     return d->full_range ? COLOR_RANGE_FULL : COLOR_RANGE_LIMITED;
+}
+
+- (void)dealloc {
+    _renderQueue = nil;
 }
 
 @end
@@ -539,122 +534,6 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     return true;
 }
 
-bool PyroWaveImpl::initMetal() {
-    VkInstance instance = device->get_instance();
-    PFN_vkGetInstanceProcAddr gipa = loadMoltenVKGIPA();
-    if (!gipa) {
-        LogPyro(@"initMetal: cannot load gipa");
-        return false;
-    }
-
-    PFN_vkGetMTLDeviceMVK pfnGetMTLDevice =
-        (PFN_vkGetMTLDeviceMVK)gipa(instance, "vkGetMTLDeviceMVK");
-    if (!pfnGetMTLDevice) {
-        LogPyro(@"initMetal: vkGetMTLDeviceMVK not found");
-        return false;
-    }
-
-    void *mtlDev = nullptr;
-    pfnGetMTLDevice(device->get_physical_device(), &mtlDev);
-    mtlDevice = (__bridge id<MTLDevice>)mtlDev;
-    if (!mtlDevice) {
-        LogPyro(@"initMetal: MTLDevice is null");
-        return false;
-    }
-
-    mtlQueue = [mtlDevice newCommandQueue];
-    if (!mtlQueue) {
-        LogPyro(@"initMetal: MTLCommandQueue is null");
-        return false;
-    }
-
-    NSString *mslSource = [NSString stringWithUTF8String:kFillTextureMSL];
-    NSError *error = nil;
-    id<MTLLibrary> library =
-        [mtlDevice newLibraryWithSource:mslSource options:nil error:&error];
-    if (!library) {
-        LogPyro(@"initMetal: MSL compile failed: %s",
-                error.localizedDescription.UTF8String);
-        return false;
-    }
-
-    id<MTLFunction> fillFunc = [library newFunctionWithName:@"fill_texture"];
-    if (!fillFunc) {
-        LogPyro(@"initMetal: no fill_texture function in library");
-        return false;
-    }
-
-    mtlFillPipeline =
-        [mtlDevice newComputePipelineStateWithFunction:fillFunc error:&error];
-    if (!mtlFillPipeline) {
-        LogPyro(@"initMetal: pipeline state failed: %s",
-                error.localizedDescription.UTF8String);
-        return false;
-    }
-
-    LogPyro(@"Metal interop initialized: device=%p queue=%p pipeline=%p",
-            (__bridge void *)mtlDevice, (__bridge void *)mtlQueue,
-            (__bridge void *)mtlFillPipeline);
-    return true;
-}
-
-void PyroWaveImpl::fillYUVWithMetal(float yVal, float uvVal) {
-    if (!mtlDevice || !mtlQueue || !mtlFillPipeline) {
-        LogPyro(@"fillYUVWithMetal: Metal not initialized");
-        return;
-    }
-
-    VkInstance instance = device->get_instance();
-    PFN_vkGetInstanceProcAddr gipa = loadMoltenVKGIPA();
-    PFN_vkGetMTLTextureMVK pfnGetMTLTexture =
-        (PFN_vkGetMTLTextureMVK)gipa(instance, "vkGetMTLTextureMVK");
-    if (!pfnGetMTLTexture) {
-        LogPyro(@"fillYUVWithMetal: vkGetMTLTextureMVK not found");
-        return;
-    }
-
-    vkDeviceWaitIdle(device->get_device());
-
-    float planeVals[3] = { yVal, uvVal, uvVal };
-    unsigned planeW[3] = { (unsigned)width, (unsigned)chromaW, (unsigned)chromaW };
-    unsigned planeH[3] = { (unsigned)height, (unsigned)chromaH, (unsigned)chromaH };
-
-    id<MTLCommandBuffer> cmd = [mtlQueue commandBuffer];
-    for (int i = 0; i < 3; i++) {
-        VkImage img = yuvImages[i]->get_image();
-        void *mtlTex = nullptr;
-        pfnGetMTLTexture(img, &mtlTex);
-        id<MTLTexture> tex = (__bridge id<MTLTexture>)mtlTex;
-        if (!tex) {
-            LogPyro(@"fillYUVWithMetal: plane %d MTLTexture is null", i);
-            continue;
-        }
-
-        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
-        [enc setComputePipelineState:mtlFillPipeline];
-        [enc setTexture:tex atIndex:0];
-        [enc setBytes:&planeVals[i] length:sizeof(float) atIndex:0];
-
-        MTLSize threadSize = MTLSizeMake(16, 16, 1);
-        MTLSize numThreads = MTLSizeMake(
-            (planeW[i] + 15) / 16,
-            (planeH[i] + 15) / 16,
-            1);
-        [enc dispatchThreadgroups:numThreads threadsPerThreadgroup:threadSize];
-        [enc endEncoding];
-    }
-    [cmd commit];
-    [cmd waitUntilCompleted];
-
-    vkDeviceWaitIdle(device->get_device());
-    LogPyro(@"fillYUVWithMetal: planes filled Y=%.2f U=%.2f V=%.2f", yVal, uvVal, uvVal);
-}
-
-void PyroWaveImpl::cleanupMetal() {
-    mtlDevice = nil;
-    mtlQueue = nil;
-    mtlFillPipeline = nil;
-}
 namespace Granite {
 enum class Stage { Vertex, Fragment, Compute };
 class GLSLCompiler {
