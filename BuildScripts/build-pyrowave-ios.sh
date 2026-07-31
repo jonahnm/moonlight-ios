@@ -109,9 +109,18 @@ if [ ! -d "pyrowave" ]; then
     git fetch --depth 1 origin "$PYROWAVE_REV"
     git checkout FETCH_HEAD -q
 
-    # DEBUG: Add clear_image test after idwt to verify command buffer writes.
-    # Replaces "decoded_frame_for_current_sequence = true;"
-    # with a clear_image call before returning.
+    # DEBUG: clear_image BEFORE idwt to test if fragment render pass overwrites.
+    # Insert at start of decode() right after the extract+payload barriers.
+    sed -i '' '/if (!dequant(cmd))/i\
+	{\
+		VkClearValue cv = {};\
+		cv.color.float32[0] = 0.25f;\
+		cv.color.float32[1] = 0.0f;\
+		cv.color.float32[2] = 0.0f;\
+		cv.color.float32[3] = 1.0f;\
+		cmd.clear_image(views.planes[0]->get_image(), cv);\
+	}\
+' pyrowave_decoder.cpp
     sed -i '' '/decoded_frame_for_current_sequence = true;/i\
 	{\
 		VkClearValue cv = {};\

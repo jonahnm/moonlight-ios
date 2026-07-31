@@ -378,14 +378,14 @@ static void LogPyro(NSString *fmt, ...) {
 
     auto cmd = d->device->request_command_buffer();
 
-    // Transition YUV planes to GENERAL for the decoder's compute path (storage image writes).
+    // Transition YUV planes to COLOR_ATTACHMENT_OPTIMAL for fragment path render passes.
     cmd->begin_barrier_batch();
     for (int i = 0; i < 3; i++) {
         cmd->image_barrier(*d->yuvImages[i], VK_IMAGE_LAYOUT_UNDEFINED,
-                           VK_IMAGE_LAYOUT_GENERAL,
+                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
-                           VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                           VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+                           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
     }
     cmd->end_barrier_batch();
 
@@ -401,10 +401,10 @@ static void LogPyro(NSString *fmt, ...) {
     cmd->begin_barrier_batch();
     for (int i = 0; i < 3; i++) {
         cmd->image_barrier(*d->yuvImages[i],
-                           VK_IMAGE_LAYOUT_GENERAL,
+                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                            VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
-                           VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                           VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                            VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     }
@@ -489,11 +489,10 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     chromaW = (c == PyroWave::ChromaSubsampling::Chroma420) ? width >> 1 : width;
     chromaH = (c == PyroWave::ChromaSubsampling::Chroma420) ? height >> 1 : height;
 
-    // Use R16_SFLOAT — Apple GPUs don't support STORAGE_IMAGE for R8_UNORM/R16_UNORM.
-    VkFormat plane_format = VK_FORMAT_R16_SFLOAT;
+    // Fragment path: use R8_UNORM, no STORAGE needed.
+    VkFormat plane_format = VK_FORMAT_R8_UNORM;
     ImageCreateInfo info = ImageCreateInfo::immutable_2d_image(width, height, plane_format);
-    info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-                 VK_IMAGE_USAGE_STORAGE_BIT;
+    info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     info.initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     yuvImages[0] = device->create_image(info);
     info.width = chromaW; info.height = chromaH;
@@ -506,7 +505,7 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     for (int i = 0; i < 3; i++)
         views.planes[i] = &yuvImages[i]->get_view();
 
-    if (!decoder.init(device, width, height, chroma, false)) {
+    if (!decoder.init(device, width, height, chroma, true)) {
         LogPyro(@"Decoder::init() failed");
         return false;
     }
