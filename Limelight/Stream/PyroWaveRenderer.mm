@@ -429,10 +429,7 @@ static void LogPyro(NSString *fmt, ...) {
 
     // GPU decode path — may silently fail on MoltenVK if SPIR-V compilation is broken
     if (!d->decoder.decode(*cmd, d->views)) {
-        LogPyro(@"decode() failed");
-        d->device->submit(cmd);
-        d->wsi.end_frame();
-        return DR_NEED_IDR;
+        LogPyro(@"decode() failed — continuing to Metal fill test");
     }
     
     LogPyro(@"frame %u: decode done, presenting", du->frameNumber);
@@ -453,8 +450,8 @@ static void LogPyro(NSString *fmt, ...) {
     // Metal fallback: fill YUV planes via native Metal compute.
     // This bypasses MoltenVK's SPIR-V→MSL compiler entirely.
     if (d->mtlDevice) {
-        LogPyro(@"frame %u: Metal fill fallback (Y=0.5, UV=0.5)", du->frameNumber);
-        d->fillYUVWithMetal(0.5f, 0.5f);
+        LogPyro(@"frame %u: Metal fill fallback (Y=1.0, UV=0.5)", du->frameNumber);
+        d->fillYUVWithMetal(1.0f, 0.5f);
 
         // Re-issue layout barriers for fragment shader visibility after Metal write
         cmd = d->device->request_command_buffer();
@@ -471,15 +468,15 @@ static void LogPyro(NSString *fmt, ...) {
         cmd->end_barrier_batch();
     }
 
-    LogPyro(@"frame %u: presenting with debug white clear + quad", du->frameNumber);
-    // DEBUG: Render Y-only as red to verify decoder writes Y plane.
-    // If you see red image: Y plane is filled correctly by decoder.
-    // If black: Y plane is empty / decoder not writing to views.planes[0].
-    // If white: render pass works, quad drawing on top
+    LogPyro(@"frame %u: presenting with magenta clear + debug quad", du->frameNumber);
+    // DEBUG TEST PATTERN:
+    //   Magenta screen  = render pass works, quad shader broken/not drawn
+    //   White/red screen = Metal fill + fragment shader + present all work
+    //   Black screen    = render pass or present is broken
     {
         auto rp_info = d->device->get_swapchain_render_pass(SwapchainRenderPass::ColorOnly);
-        rp_info.clear_color[0].float32[0] = 1.0f; // White clear
-        rp_info.clear_color[0].float32[1] = 1.0f;
+        rp_info.clear_color[0].float32[0] = 1.0f; // Magenta clear
+        rp_info.clear_color[0].float32[1] = 0.0f;
         rp_info.clear_color[0].float32[2] = 1.0f;
         rp_info.clear_color[0].float32[3] = 1.0f;
         cmd->begin_render_pass(rp_info);
