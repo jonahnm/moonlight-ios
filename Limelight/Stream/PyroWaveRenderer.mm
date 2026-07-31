@@ -476,10 +476,10 @@ static void LogPyro(NSString *fmt, ...) {
         cmd->end_barrier_batch();
     }
 
-    LogPyro(@"frame %u: presenting with magenta clear + debug quad", du->frameNumber);
-    // DEBUG TEST PATTERN:
-    //   Magenta screen  = render pass works, quad shader broken/not drawn
-    //   White/red screen = Metal fill + fragment shader + present all work
+    LogPyro(@"frame %u: presenting CLEAR-ONLY magenta (no quad)", du->frameNumber);
+    // DEBUG TEST: clear-only present. Isolates render-pass/present from the
+    // fragment shader and texture sampling.
+    //   Magenta screen  = render pass + present work (issue is quad/sampling)
     //   Black screen    = render pass or present is broken
     {
         auto rp_info = d->device->get_swapchain_render_pass(SwapchainRenderPass::ColorOnly);
@@ -488,12 +488,6 @@ static void LogPyro(NSString *fmt, ...) {
         rp_info.clear_color[0].float32[2] = 1.0f;
         rp_info.clear_color[0].float32[3] = 1.0f;
         cmd->begin_render_pass(rp_info);
-        cmd->set_quad_state();
-        cmd->set_program(d->device->request_program(fullscreen_vert_spv, sizeof(fullscreen_vert_spv),
-                                                     debug_y2r_frag_spv, sizeof(debug_y2r_frag_spv)));
-        cmd->set_texture(0, 0, *d->views.planes[0]);
-        cmd->set_sampler(0, 3, StockSampler::LinearClamp);
-        cmd->draw(3);
     }
     cmd->end_render_pass();
 
