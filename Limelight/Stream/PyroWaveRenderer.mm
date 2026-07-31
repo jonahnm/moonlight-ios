@@ -415,14 +415,16 @@ static void LogPyro(NSString *fmt, ...) {
     }
     cmd->end_barrier_batch();
 
+    LogPyro(@"frame %u: presenting with debug white clear + quad", du->frameNumber);
     // DEBUG: Render Y-only as red to verify decoder writes Y plane.
     // If you see red image: Y plane is filled correctly by decoder.
     // If black: Y plane is empty / decoder not writing to views.planes[0].
+    // If white: render pass works, quad drawing on top
     {
         auto rp_info = d->device->get_swapchain_render_pass(SwapchainRenderPass::ColorOnly);
-        rp_info.clear_color[0].float32[0] = 0.0f;
-        rp_info.clear_color[0].float32[1] = 0.0f;
-        rp_info.clear_color[0].float32[2] = 0.0f;
+        rp_info.clear_color[0].float32[0] = 1.0f; // White clear
+        rp_info.clear_color[0].float32[1] = 1.0f;
+        rp_info.clear_color[0].float32[2] = 1.0f;
         rp_info.clear_color[0].float32[3] = 1.0f;
         cmd->begin_render_pass(rp_info);
         cmd->set_quad_state();

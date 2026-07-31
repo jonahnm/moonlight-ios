@@ -1,6 +1,14 @@
-**/xcuserdata/
-**/Moonlight.xcscmblueprint
-**/xcschemes/*.xcscheme
-.DS_Store
-Build
-DerivedData
+# Crash reports and logs
+crashreps/
+moonlight.log
+
+# MoltenVK framework (restored from cache in CI)
+libs/MoltenVK/MoltenVK.framework/
+
+# Backup files
+Limelight/Stream/PyroWaveShaders.h.bak
+
+# Build artifacts
+build/
+*.xcarchive
+*.xcuserdatad
