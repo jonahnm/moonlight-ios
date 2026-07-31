@@ -46,7 +46,7 @@ framework_paths_to_add = ['$(PROJECT_DIR)/libs/MoltenVK']
 granite_libs = Dir.glob(File.join(ENV['PROJECT_DIR'], 'libs', 'Granite', 'lib', '*.a'))
                .map { |f| "-l" + File.basename(f).sub(/^lib/, '').sub(/\.a$/, '') }
 links_to_add = %w[-lpyrowave] + granite_libs
-frameworks_to_add = %w[MoltenVK QuartzCore Metal]
+frameworks_to_add = %w[MoltenVK QuartzCore Metal IOSurface IOKit]
 defines_to_add = %w[
   HAVE_PYROWAVE=1 GRANITE_VULKAN_SYSTEM_HANDLES=1
   GRANITE_VULKAN_SPIRV_CROSS=1 PYROWAVE_PRECISION=1

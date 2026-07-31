@@ -7,7 +7,7 @@ PROJECT_DIR="$SCRIPT_DIR/.."
 LIBS_DIR="$PROJECT_DIR/libs"
 
 # Versions / revisions
-MOLTENVK_VERSION="1.2.9"
+MOLTENVK_VERSION="1.4.2"
 GRANITE_REV="094adec89cbdb4f29ecaf858ed944a53ebe9d18a"
 PYROWAVE_REV="217366d4d772eb800150fa57e703da295605d63f"
 PYROWAVE_REPO="https://github.com/Themaister/pyrowave.git"
@@ -40,9 +40,11 @@ if [ -z "$FW" ]; then
     exit 1
 fi
 cp -R "$FW" "$LIBS_DIR/MoltenVK/"
-# Copy Include directory if present
+# Copy Include directory if present (both old and new archive layouts)
 if [ -d "$BUILD_DIR/moltenvk-extract/Include" ]; then
     cp -R "$BUILD_DIR/moltenvk-extract/Include/" "$LIBS_DIR/MoltenVK/include/"
+elif [ -d "$BUILD_DIR/moltenvk-extract/MoltenVK/MoltenVK/include" ]; then
+    cp -R "$BUILD_DIR/moltenvk-extract/MoltenVK/MoltenVK/include/" "$LIBS_DIR/MoltenVK/include/"
 fi
 
 # ── Granite ──────────────────────────────────────────────────────
