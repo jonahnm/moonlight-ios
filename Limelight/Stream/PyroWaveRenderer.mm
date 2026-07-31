@@ -421,30 +421,26 @@ static void LogPyro(NSString *fmt, ...) {
 
     auto cmd = d->device->request_command_buffer();
 
-    // =====================================================================
-    // DEBUG TEST: does the PyroWave decode (fragment-shader iDWT) actually
-    // produce output? No Metal fill. decode() handles its own layout
-    // transitions and leaves planes in READ_ONLY_OPTIMAL.
-    //   Video luma visible (red-ish)  = decode works; fix present shader
-    //   Solid black                   = decode shaders fail to compile
-    // =====================================================================
+    // Decode via PyroWave fragment-path shaders. decode() handles its own
+    // layout transitions and leaves the planes in READ_ONLY_OPTIMAL.
     if (!d->decoder.decode(*cmd, d->views)) {
         LogPyro(@"decode() returned false");
     }
-    LogPyro(@"frame %u: decode done", du->frameNumber);
 
-    LogPyro(@"frame %u: presenting magenta clear + Y2R quad (sample decode output)", du->frameNumber);
+    // Present: sample Y/Cb/Cr and convert to RGB in the fragment shader.
     {
         auto rp_info = d->device->get_swapchain_render_pass(SwapchainRenderPass::ColorOnly);
-        rp_info.clear_color[0].float32[0] = 1.0f; // Magenta clear
+        rp_info.clear_color[0].float32[0] = 0.0f;
         rp_info.clear_color[0].float32[1] = 0.0f;
-        rp_info.clear_color[0].float32[2] = 1.0f;
+        rp_info.clear_color[0].float32[2] = 0.0f;
         rp_info.clear_color[0].float32[3] = 1.0f;
         cmd->begin_render_pass(rp_info);
         cmd->set_quad_state();
         cmd->set_program(d->device->request_program(fullscreen_vert_spv, sizeof(fullscreen_vert_spv),
-                                                     debug_y2r_frag_spv, sizeof(debug_y2r_frag_spv)));
-        cmd->set_texture(0, 0, *d->views.planes[0]);
+                                                     yuv2rgb_frag_spv, sizeof(yuv2rgb_frag_spv)));
+        cmd->set_texture(0, 0, *d->views.planes[0]); // Y
+        cmd->set_texture(0, 1, *d->views.planes[1]); // Cb
+        cmd->set_texture(0, 2, *d->views.planes[2]); // Cr
         cmd->set_sampler(0, 3, StockSampler::LinearClamp);
         cmd->draw(3);
     }
