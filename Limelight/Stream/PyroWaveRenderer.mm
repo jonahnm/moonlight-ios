@@ -419,44 +419,18 @@ static void LogPyro(NSString *fmt, ...) {
     auto cmd = d->device->request_command_buffer();
 
     // =====================================================================
-    // DEBUG TEST: does a Vulkan-written texture sample correctly?
-    // Skip decode and Metal fill. Properly transition to TRANSFER_DST,
-    // vkCmdClearColorImage the Y plane to 1.0, transition to READ_ONLY,
-    // then sample it with the debug Y2R shader (outputs red = Y).
-    //   Red screen    = Vulkan texture write + sampling work (Metal fill is the issue)
-    //   Black screen  = Vulkan texture sampling is broken in MoltenVK
+    // DEBUG TEST: does the PyroWave decode (fragment-shader iDWT) actually
+    // produce output? No Metal fill. decode() handles its own layout
+    // transitions and leaves planes in READ_ONLY_OPTIMAL.
+    //   Video luma visible (red-ish)  = decode works; fix present shader
+    //   Solid black                   = decode shaders fail to compile
     // =====================================================================
-    cmd->begin_barrier_batch();
-    for (int i = 0; i < 3; i++) {
-        cmd->image_barrier(*d->yuvImages[i], VK_IMAGE_LAYOUT_UNDEFINED,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                           VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
-                           VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                           VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    if (!d->decoder.decode(*cmd, d->views)) {
+        LogPyro(@"decode() returned false");
     }
-    cmd->end_barrier_batch();
+    LogPyro(@"frame %u: decode done", du->frameNumber);
 
-    VkClearValue cv = {};
-    cv.color.float32[0] = 1.0f;
-    cv.color.float32[1] = 1.0f;
-    cv.color.float32[2] = 1.0f;
-    cv.color.float32[3] = 1.0f;
-    cmd->clear_image(*d->yuvImages[0], cv);
-    LogPyro(@"frame %u: Vulkan-clear Y plane to 1.0", du->frameNumber);
-
-    cmd->begin_barrier_batch();
-    for (int i = 0; i < 3; i++) {
-        cmd->image_barrier(*d->yuvImages[i],
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                           VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
-                           VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                           VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                           VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                           VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-    }
-    cmd->end_barrier_batch();
-
-    LogPyro(@"frame %u: presenting magenta clear + Y2R quad (sample Vulkan-cleared Y)", du->frameNumber);
+    LogPyro(@"frame %u: presenting magenta clear + Y2R quad (sample decode output)", du->frameNumber);
     {
         auto rp_info = d->device->get_swapchain_render_pass(SwapchainRenderPass::ColorOnly);
         rp_info.clear_color[0].float32[0] = 1.0f; // Magenta clear
