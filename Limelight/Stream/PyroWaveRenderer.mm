@@ -418,69 +418,45 @@ static void LogPyro(NSString *fmt, ...) {
 
     auto cmd = d->device->request_command_buffer();
 
-    // Transition YUV planes to COLOR_ATTACHMENT_OPTIMAL for fragment path render passes.
+    // =====================================================================
+    // DEBUG TEST: does a Vulkan-written texture sample correctly?
+    // Skip decode and Metal fill. Properly transition to TRANSFER_DST,
+    // vkCmdClearColorImage the Y plane to 1.0, transition to READ_ONLY,
+    // then sample it with the debug Y2R shader (outputs red = Y).
+    //   Red screen    = Vulkan texture write + sampling work (Metal fill is the issue)
+    //   Black screen  = Vulkan texture sampling is broken in MoltenVK
+    // =====================================================================
     cmd->begin_barrier_batch();
     for (int i = 0; i < 3; i++) {
         cmd->image_barrier(*d->yuvImages[i], VK_IMAGE_LAYOUT_UNDEFINED,
-                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
-                           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+                           VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                           VK_ACCESS_2_TRANSFER_WRITE_BIT);
     }
     cmd->end_barrier_batch();
 
-    // GPU decode path — may silently fail on MoltenVK if SPIR-V compilation is broken
-    if (!d->decoder.decode(*cmd, d->views)) {
-        LogPyro(@"decode() failed — continuing to Metal fill test");
-    }
-    
-    LogPyro(@"frame %u: decode done, presenting", du->frameNumber);
+    VkClearValue cv = {};
+    cv.color.float32[0] = 1.0f;
+    cv.color.float32[1] = 1.0f;
+    cv.color.float32[2] = 1.0f;
+    cv.color.float32[3] = 1.0f;
+    cmd->clear_image(*d->yuvImages[0], cv);
+    LogPyro(@"frame %u: Vulkan-clear Y plane to 1.0", du->frameNumber);
 
     cmd->begin_barrier_batch();
     for (int i = 0; i < 3; i++) {
         cmd->image_barrier(*d->yuvImages[i],
-                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
-                           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                           VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                           VK_ACCESS_2_TRANSFER_WRITE_BIT,
                            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                            VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     }
     cmd->end_barrier_batch();
-    d->device->submit(cmd);
 
-    // Metal fallback: fill YUV planes via native Metal compute.
-    // This bypasses MoltenVK's SPIR-V→MSL compiler entirely.
-    if (d->mtlDevice) {
-        LogPyro(@"frame %u: Metal fill fallback (Y=1.0, UV=0.5)", du->frameNumber);
-        d->fillYUVWithMetal(1.0f, 0.5f);
-    }
-
-    // Always start a fresh command buffer for the present pass. The decode
-    // command buffer was already submitted above; recording into it again
-    // (and re-submitting it) is a Vulkan error that crashes MoltenVK.
-    cmd = d->device->request_command_buffer();
-
-    // Re-issue layout barriers for fragment shader visibility after Metal write.
-    if (d->mtlDevice) {
-        cmd->begin_barrier_batch();
-        for (int i = 0; i < 3; i++) {
-            cmd->image_barrier(*d->yuvImages[i],
-                               VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
-                               VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
-                               VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                               VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-                               VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                               VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-        }
-        cmd->end_barrier_batch();
-    }
-
-    LogPyro(@"frame %u: presenting magenta clear + CONSTANT-GREEN quad", du->frameNumber);
-    // DEBUG TEST: constant-color fragment shader (no texture sampling).
-    //   Green screen  = fragment shaders work; the texture sampling is the issue
-    //   Magenta       = fragment shader broken (quad not drawn)
-    //   Black         = render pass or present broken
+    LogPyro(@"frame %u: presenting magenta clear + Y2R quad (sample Vulkan-cleared Y)", du->frameNumber);
     {
         auto rp_info = d->device->get_swapchain_render_pass(SwapchainRenderPass::ColorOnly);
         rp_info.clear_color[0].float32[0] = 1.0f; // Magenta clear
@@ -490,7 +466,9 @@ static void LogPyro(NSString *fmt, ...) {
         cmd->begin_render_pass(rp_info);
         cmd->set_quad_state();
         cmd->set_program(d->device->request_program(fullscreen_vert_spv, sizeof(fullscreen_vert_spv),
-                                                     const_green_frag_spv, sizeof(const_green_frag_spv)));
+                                                     debug_y2r_frag_spv, sizeof(debug_y2r_frag_spv)));
+        cmd->set_texture(0, 0, *d->views.planes[0]);
+        cmd->set_sampler(0, 3, StockSampler::LinearClamp);
         cmd->draw(3);
     }
     cmd->end_render_pass();
