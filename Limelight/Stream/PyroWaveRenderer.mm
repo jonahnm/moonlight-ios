@@ -132,6 +132,8 @@ public:
             VK_KHR_SURFACE_EXTENSION_NAME,
             VK_EXT_METAL_SURFACE_EXTENSION_NAME,
             "VK_KHR_get_physical_device_properties2",
+            // Enables vkGetMTLDeviceMVK / vkGetMTLTextureMVK interop functions.
+            "VK_MVK_moltenvk",
         };
     }
 
@@ -452,9 +454,15 @@ static void LogPyro(NSString *fmt, ...) {
     if (d->mtlDevice) {
         LogPyro(@"frame %u: Metal fill fallback (Y=1.0, UV=0.5)", du->frameNumber);
         d->fillYUVWithMetal(1.0f, 0.5f);
+    }
 
-        // Re-issue layout barriers for fragment shader visibility after Metal write
-        cmd = d->device->request_command_buffer();
+    // Always start a fresh command buffer for the present pass. The decode
+    // command buffer was already submitted above; recording into it again
+    // (and re-submitting it) is a Vulkan error that crashes MoltenVK.
+    cmd = d->device->request_command_buffer();
+
+    // Re-issue layout barriers for fragment shader visibility after Metal write.
+    if (d->mtlDevice) {
         cmd->begin_barrier_batch();
         for (int i = 0; i < 3; i++) {
             cmd->image_barrier(*d->yuvImages[i],
