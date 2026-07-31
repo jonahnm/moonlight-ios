@@ -7,7 +7,7 @@ PROJECT_DIR="$SCRIPT_DIR/.."
 LIBS_DIR="$PROJECT_DIR/libs"
 
 # Versions / revisions
-MOLTENVK_VERSION="1.2.11"
+MOLTENVK_VERSION="1.2.9"
 GRANITE_REV="094adec89cbdb4f29ecaf858ed944a53ebe9d18a"
 PYROWAVE_REV="217366d4d772eb800150fa57e703da295605d63f"
 PYROWAVE_REPO="https://github.com/Themaister/pyrowave.git"
