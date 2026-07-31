@@ -554,9 +554,12 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     chromaH = (c == PyroWave::ChromaSubsampling::Chroma420) ? height >> 1 : height;
 
     // Fragment path: use R8_UNORM, no STORAGE needed.
+    // NOTE: STORAGE is added so the MoltenVK-backed MTLTexture has
+    // MTLTextureUsage.shaderWrite, enabling native Metal compute interop.
     VkFormat plane_format = VK_FORMAT_R8_UNORM;
     ImageCreateInfo info = ImageCreateInfo::immutable_2d_image(width, height, plane_format);
-    info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+                 VK_IMAGE_USAGE_STORAGE_BIT;
     info.initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     yuvImages[0] = device->create_image(info);
     info.width = chromaW; info.height = chromaH;
