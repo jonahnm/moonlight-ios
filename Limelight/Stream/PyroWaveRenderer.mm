@@ -602,7 +602,7 @@ bool PyroWaveImpl::initMetal() {
 
     void *mtlDev = nullptr;
     pfnGetMTLDevice(device->get_physical_device(), &mtlDev);
-    mtlDevice = (id<MTLDevice>)mtlDev;
+    mtlDevice = (__bridge id<MTLDevice>)mtlDev;
     if (!mtlDevice) {
         LogPyro(@"initMetal: MTLDevice is null");
         return false;
@@ -639,7 +639,8 @@ bool PyroWaveImpl::initMetal() {
     }
 
     LogPyro(@"Metal interop initialized: device=%p queue=%p pipeline=%p",
-            (void *)mtlDevice, (void *)mtlQueue, (void *)mtlFillPipeline);
+            (__bridge void *)mtlDevice, (__bridge void *)mtlQueue,
+            (__bridge void *)mtlFillPipeline);
     return true;
 }
 
@@ -669,7 +670,7 @@ void PyroWaveImpl::fillYUVWithMetal(float yVal, float uvVal) {
         VkImage img = yuvImages[i]->get_image();
         void *mtlTex = nullptr;
         pfnGetMTLTexture(img, &mtlTex);
-        id<MTLTexture> tex = (id<MTLTexture>)mtlTex;
+        id<MTLTexture> tex = (__bridge id<MTLTexture>)mtlTex;
         if (!tex) {
             LogPyro(@"fillYUVWithMetal: plane %d MTLTexture is null", i);
             continue;
@@ -685,7 +686,7 @@ void PyroWaveImpl::fillYUVWithMetal(float yVal, float uvVal) {
             (planeW[i] + 15) / 16,
             (planeH[i] + 15) / 16,
             1);
-        [enc dispatchComputeThreadgroups:numThreads threadsPerThreadgroup:threadSize];
+        [enc dispatchThreadgroups:numThreads threadsPerThreadgroup:threadSize];
         [enc endEncoding];
     }
     [cmd commit];
