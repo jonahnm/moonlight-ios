@@ -109,13 +109,25 @@ if [ ! -d "pyrowave" ]; then
     git fetch --depth 1 origin "$PYROWAVE_REV"
     git checkout FETCH_HEAD -q
 
-    # No patch needed: the horizontal iDWT pass already has 3 color
-    # attachments at output_level=0 (Y+Cb+Cr at line 525).
+    # DEBUG: Add clear_image test after idwt to verify command buffer writes.
+    # Replaces "decoded_frame_for_current_sequence = true;"
+    # with a clear_image call before returning.
+    sed -i '' '/decoded_frame_for_current_sequence = true;/i\
+	{\
+		VkClearValue cv = {};\
+		cv.color.float32[0] = 0.75f;\
+		cv.color.float32[1] = 0.0f;\
+		cv.color.float32[2] = 0.0f;\
+		cv.color.float32[3] = 1.0f;\
+		cmd.clear_image(views.planes[0]->get_image(), cv);\
+	}\
+' pyrowave_decoder.cpp
     cd "$BUILD_DIR"
 fi
 
 # ── CMake build ──────────────────────────────────────────────────
-# Only run cmake if build system doesn't exist (cache miss or first build)
+# Force rebuild to pick up source patches
+rm -rf build-ios
 if [ ! -f "build-ios/build.ninja" ]; then
     echo "=== Configuring Granite + PyroWave for iOS arm64 ==="
     mkdir -p build-ios
