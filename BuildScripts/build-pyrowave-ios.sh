@@ -112,6 +112,29 @@ if [ ! -d "pyrowave" ]; then
 cd "$BUILD_DIR"
 fi
 
+# Remove any leftover DEBUG clear_image block from pyrowave_decoder.cpp.
+# This guarantees the decoder leaves its real iDWT output in the YUV planes
+# regardless of what stale cache is restored.
+python3 << 'PYEOF'
+import sys
+path = 'pyrowave/pyrowave_decoder.cpp'
+with open(path) as f:
+    content = f.read()
+start = content.find('\t// DEBUG: Overwrite Y plane')
+if start != -1:
+    end = content.find('\n\tdecoded_frame_for_current_sequence = true;', start)
+    if end != -1:
+        content = content[:start] + '\tdecoded_frame_for_current_sequence = true;' + content[end + len('\n\tdecoded_frame_for_current_sequence = true;'):]
+        with open(path, 'w') as f:
+            f.write(content)
+        print('Removed DEBUG clear_image block from pyrowave_decoder.cpp')
+    else:
+        print('WARNING: found DEBUG block start but no end marker', file=sys.stderr)
+        sys.exit(1)
+else:
+    print('No DEBUG clear_image block present (already clean)')
+PYEOF
+
 # ── CMake build ──────────────────────────────────────────────────
 if [ ! -f "build-ios/build.ninja" ]; then
     echo "=== Configuring Granite + PyroWave for iOS arm64 ==="
