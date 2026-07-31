@@ -97,13 +97,26 @@ jobs:
             )
           fi
 
+          set +e
           xcodebuild archive \
             -project Moonlight.xcodeproj \
             -scheme "$SCHEME" \
             -configuration "$CONFIGURATION" \
             -sdk iphoneos \
             -archivePath "$RUNNER_TEMP/Moonlight.xcarchive" \
-            "${SIGN_ARGS[@]}"
+            "${SIGN_ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+          BUILD_EXIT=${PIPESTATUS[0]}
+          echo "xcodebuild exit code: $BUILD_EXIT"
+          grep -n "error:" "$RUNNER_TEMP/xcodebuild.log" | head -50 || true
+          exit $BUILD_EXIT
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: ${{ runner.temp }}/xcodebuild.log
+          if-no-files-found: warn
 
       - name: Package IPA
         run: |
