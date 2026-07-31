@@ -25,8 +25,11 @@ extern "C" int nanosleep(const struct timespec *, struct timespec *);
 #define VK_USE_PLATFORM_METAL_EXT 1
 #define VK_NO_PROTOTYPES 1
 #include <vulkan/vulkan_headers.hpp>
-// Alias for renamed Vulkan extension type (EXT is now defined by vulkan.h)
+// Alias for renamed Vulkan extension type (EXT is now defined by vulkan.h).
+// Newer Vulkan headers (MoltenVK 1.4.x) define the KHR type natively.
+#ifndef VK_KHR_DEVICE_FAULT_EXTENSION_NAME
 typedef VkPhysicalDeviceFaultFeaturesEXT VkPhysicalDeviceFaultFeaturesKHR;
+#endif
 
 #include <dlfcn.h>
 
