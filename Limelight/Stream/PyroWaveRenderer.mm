@@ -2,8 +2,9 @@
 #import "PyroWaveShaders.h"
 #import "StreamView.h"
 
-#include <QuartzCore/CAMetalLayer.h>
-#include <SDL.h>
+#import <Metal/Metal.h>
+#import <QuartzCore/CAMetalLayer.h>
+#import <SDL.h>
 
 #pragma push_macro("signals")
 #undef signals
@@ -28,6 +29,24 @@ extern "C" int nanosleep(const struct timespec *, struct timespec *);
 typedef VkPhysicalDeviceFaultFeaturesEXT VkPhysicalDeviceFaultFeaturesKHR;
 
 #include <dlfcn.h>
+
+// MoltenVK interop function pointer types
+typedef void (*PFN_vkGetMTLDeviceMVK)(VkPhysicalDevice, void **);
+typedef void (*PFN_vkGetMTLTextureMVK)(VkImage, void **);
+
+// MSL source: fills a 2D texture with a constant float value
+static const char *kFillTextureMSL =
+    "#include <metal_stdlib>\n"
+    "using namespace metal;\n"
+    "kernel void fill_texture(\n"
+    "    texture2d<float, access::write> tex [[texture(0)]],\n"
+    "    constant float &value [[buffer(0)]],\n"
+    "    uint2 gid [[thread_position_in_grid]])\n"
+    "{\n"
+    "    if (gid.x < tex.get_width() && gid.y < tex.get_height()) {\n"
+    "        tex.write(float4(value), gid);\n"
+    "    }\n"
+    "}\n";
 
 // Returns MoltenVK's real vkGetInstanceProcAddr entry point.
 //
@@ -168,6 +187,15 @@ struct PyroWaveImpl {
 
     bool init_swapchain(bool want_hdr);
     bool init_decoder(PyroWave::ChromaSubsampling c);
+
+    // Metal interop for fallback decode
+    id<MTLDevice> mtlDevice = nil;
+    id<MTLCommandQueue> mtlQueue = nil;
+    id<MTLComputePipelineState> mtlFillPipeline = nil;
+
+    bool initMetal();
+    void fillYUVWithMetal(float yVal, float uvVal);
+    void cleanupMetal();
 };
 
 static void LogPyro(NSString *fmt, ...) {
@@ -299,6 +327,11 @@ static void LogPyro(NSString *fmt, ...) {
         return NO;
     }
 
+    // Initialize Metal interop for fallback fill of YUV planes
+    if (!d->initMetal()) {
+        LogPyro(@"Metal interop init failed — will rely on GPU decoder");
+    }
+
     d->initialized = true;
     LogPyro(@"Vulkan context ready %dx%d", d->width, d->height);
     return YES;
@@ -394,6 +427,7 @@ static void LogPyro(NSString *fmt, ...) {
     }
     cmd->end_barrier_batch();
 
+    // GPU decode path — may silently fail on MoltenVK if SPIR-V compilation is broken
     if (!d->decoder.decode(*cmd, d->views)) {
         LogPyro(@"decode() failed");
         d->device->submit(cmd);
@@ -414,6 +448,28 @@ static void LogPyro(NSString *fmt, ...) {
                            VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     }
     cmd->end_barrier_batch();
+    d->device->submit(cmd);
+
+    // Metal fallback: fill YUV planes via native Metal compute.
+    // This bypasses MoltenVK's SPIR-V→MSL compiler entirely.
+    if (d->mtlDevice) {
+        LogPyro(@"frame %u: Metal fill fallback (Y=0.5, UV=0.5)", du->frameNumber);
+        d->fillYUVWithMetal(0.5f, 0.5f);
+
+        // Re-issue layout barriers for fragment shader visibility after Metal write
+        cmd = d->device->request_command_buffer();
+        cmd->begin_barrier_batch();
+        for (int i = 0; i < 3; i++) {
+            cmd->image_barrier(*d->yuvImages[i],
+                               VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
+                               VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
+                               VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                               VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                               VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                               VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+        }
+        cmd->end_barrier_batch();
+    }
 
     LogPyro(@"frame %u: presenting with debug white clear + quad", du->frameNumber);
     // DEBUG: Render Y-only as red to verify decoder writes Y plane.
@@ -451,6 +507,7 @@ static void LogPyro(NSString *fmt, ...) {
     for (auto &img : d->yuvImages) {
         img.reset();
     }
+    d->cleanupMetal();
     if (d->metalLayer) {
         [d->metalLayer removeFromSuperlayer];
         d->metalLayer = nil;
@@ -525,7 +582,121 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     return true;
 }
 
-// Stub for Granite::GLSLCompiler (forward-declared but not defined in headers)
+bool PyroWaveImpl::initMetal() {
+    VkInstance instance = device->get_instance();
+    PFN_vkGetInstanceProcAddr gipa = loadMoltenVKGIPA();
+    if (!gipa) {
+        LogPyro(@"initMetal: cannot load gipa");
+        return false;
+    }
+
+    PFN_vkGetMTLDeviceMVK pfnGetMTLDevice =
+        (PFN_vkGetMTLDeviceMVK)gipa(instance, "vkGetMTLDeviceMVK");
+    if (!pfnGetMTLDevice) {
+        LogPyro(@"initMetal: vkGetMTLDeviceMVK not found");
+        return false;
+    }
+
+    void *mtlDev = nullptr;
+    pfnGetMTLDevice(device->get_physical_device(), &mtlDev);
+    mtlDevice = (id<MTLDevice>)mtlDev;
+    if (!mtlDevice) {
+        LogPyro(@"initMetal: MTLDevice is null");
+        return false;
+    }
+
+    mtlQueue = [mtlDevice newCommandQueue];
+    if (!mtlQueue) {
+        LogPyro(@"initMetal: MTLCommandQueue is null");
+        return false;
+    }
+
+    NSString *mslSource = [NSString stringWithUTF8String:kFillTextureMSL];
+    NSError *error = nil;
+    id<MTLLibrary> library =
+        [mtlDevice newLibraryWithSource:mslSource options:nil error:&error];
+    if (!library) {
+        LogPyro(@"initMetal: MSL compile failed: %s",
+                error.localizedDescription.UTF8String);
+        return false;
+    }
+
+    id<MTLFunction> fillFunc = [library newFunctionWithName:@"fill_texture"];
+    if (!fillFunc) {
+        LogPyro(@"initMetal: no fill_texture function in library");
+        return false;
+    }
+
+    mtlFillPipeline =
+        [mtlDevice newComputePipelineStateWithFunction:fillFunc error:&error];
+    if (!mtlFillPipeline) {
+        LogPyro(@"initMetal: pipeline state failed: %s",
+                error.localizedDescription.UTF8String);
+        return false;
+    }
+
+    LogPyro(@"Metal interop initialized: device=%p queue=%p pipeline=%p",
+            (void *)mtlDevice, (void *)mtlQueue, (void *)mtlFillPipeline);
+    return true;
+}
+
+void PyroWaveImpl::fillYUVWithMetal(float yVal, float uvVal) {
+    if (!mtlDevice || !mtlQueue || !mtlFillPipeline) {
+        LogPyro(@"fillYUVWithMetal: Metal not initialized");
+        return;
+    }
+
+    VkInstance instance = device->get_instance();
+    PFN_vkGetInstanceProcAddr gipa = loadMoltenVKGIPA();
+    PFN_vkGetMTLTextureMVK pfnGetMTLTexture =
+        (PFN_vkGetMTLTextureMVK)gipa(instance, "vkGetMTLTextureMVK");
+    if (!pfnGetMTLTexture) {
+        LogPyro(@"fillYUVWithMetal: vkGetMTLTextureMVK not found");
+        return;
+    }
+
+    vkDeviceWaitIdle(device->get_device());
+
+    float planeVals[3] = { yVal, uvVal, uvVal };
+    unsigned planeW[3] = { (unsigned)width, (unsigned)chromaW, (unsigned)chromaW };
+    unsigned planeH[3] = { (unsigned)height, (unsigned)chromaH, (unsigned)chromaH };
+
+    id<MTLCommandBuffer> cmd = [mtlQueue commandBuffer];
+    for (int i = 0; i < 3; i++) {
+        VkImage img = yuvImages[i]->get_image();
+        void *mtlTex = nullptr;
+        pfnGetMTLTexture(img, &mtlTex);
+        id<MTLTexture> tex = (id<MTLTexture>)mtlTex;
+        if (!tex) {
+            LogPyro(@"fillYUVWithMetal: plane %d MTLTexture is null", i);
+            continue;
+        }
+
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:mtlFillPipeline];
+        [enc setTexture:tex atIndex:0];
+        [enc setBytes:&planeVals[i] length:sizeof(float) atIndex:0];
+
+        MTLSize threadSize = MTLSizeMake(16, 16, 1);
+        MTLSize numThreads = MTLSizeMake(
+            (planeW[i] + 15) / 16,
+            (planeH[i] + 15) / 16,
+            1);
+        [enc dispatchComputeThreadgroups:numThreads threadsPerThreadgroup:threadSize];
+        [enc endEncoding];
+    }
+    [cmd commit];
+    [cmd waitUntilCompleted];
+
+    vkDeviceWaitIdle(device->get_device());
+    LogPyro(@"fillYUVWithMetal: planes filled Y=%.2f U=%.2f V=%.2f", yVal, uvVal, uvVal);
+}
+
+void PyroWaveImpl::cleanupMetal() {
+    mtlDevice = nil;
+    mtlQueue = nil;
+    mtlFillPipeline = nil;
+}
 namespace Granite {
 enum class Stage { Vertex, Fragment, Compute };
 class GLSLCompiler {
