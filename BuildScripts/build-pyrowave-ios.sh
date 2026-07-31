@@ -7,7 +7,7 @@ PROJECT_DIR="$SCRIPT_DIR/.."
 LIBS_DIR="$PROJECT_DIR/libs"
 
 # Versions / revisions
-MOLTENVK_VERSION="1.2.9"
+MOLTENVK_VERSION="1.2.11"
 GRANITE_REV="094adec89cbdb4f29ecaf858ed944a53ebe9d18a"
 PYROWAVE_REV="217366d4d772eb800150fa57e703da295605d63f"
 PYROWAVE_REPO="https://github.com/Themaister/pyrowave.git"
@@ -109,34 +109,10 @@ if [ ! -d "pyrowave" ]; then
     git fetch --depth 1 origin "$PYROWAVE_REV"
     git checkout FETCH_HEAD -q
 
-    # DEBUG: clear_image BEFORE idwt to test if fragment render pass overwrites.
-    # Insert at start of decode() right after the extract+payload barriers.
-    sed -i '' '/if (!dequant(cmd))/i\
-	{\
-		VkClearValue cv = {};\
-		cv.color.float32[0] = 0.25f;\
-		cv.color.float32[1] = 0.0f;\
-		cv.color.float32[2] = 0.0f;\
-		cv.color.float32[3] = 1.0f;\
-		cmd.clear_image(views.planes[0]->get_image(), cv);\
-	}\
-' pyrowave_decoder.cpp
-    sed -i '' '/decoded_frame_for_current_sequence = true;/i\
-	{\
-		VkClearValue cv = {};\
-		cv.color.float32[0] = 0.75f;\
-		cv.color.float32[1] = 0.0f;\
-		cv.color.float32[2] = 0.0f;\
-		cv.color.float32[3] = 1.0f;\
-		cmd.clear_image(views.planes[0]->get_image(), cv);\
-	}\
-' pyrowave_decoder.cpp
-    cd "$BUILD_DIR"
+cd "$BUILD_DIR"
 fi
 
 # ── CMake build ──────────────────────────────────────────────────
-# Force rebuild to pick up source patches
-rm -rf build-ios
 if [ ! -f "build-ios/build.ninja" ]; then
     echo "=== Configuring Granite + PyroWave for iOS arm64 ==="
     mkdir -p build-ios
