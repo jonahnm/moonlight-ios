@@ -69,6 +69,10 @@ static PFN_vkGetInstanceProcAddr loadMoltenVKGIPA(void) {
 #include <memory>
 #include <atomic>
 
+#include <mach/mach.h>
+#include <mach/task.h>
+#include <mach/mach_init.h>
+
 using namespace Vulkan;
 
 static void claimGraniteThread() {
@@ -306,45 +310,55 @@ static void LogPyro(NSString *fmt, ...) {
 }
 
 - (int)submitDecodeUnit:(PDECODE_UNIT)du {
-    if (_stopped) return DR_OK;
+    // This runs on moonlight-common's VideoDecoderThreadProc, a plain
+    // pthread with NO autorelease pool. All autoreleased objects created
+    // here would otherwise leak (their pending autorelease release never
+    // fires). Wrapping in an autorelease pool drains them immediately.
+    // The block retains frameData, so it stays alive until processed.
+    @autoreleasepool {
+        if (_stopped) return DR_OK;
 
-    // Bound the render queue: drop frames if the background decoder is
-    // backed up, so we never accumulate unbounded frame data.
-    if (d->pendingFrames.load(std::memory_order_relaxed) >= 4) {
+        // Bound the render queue: drop frames if the background decoder is
+        // backed up, so we never accumulate unbounded frame data.
+        if (d->pendingFrames.load(std::memory_order_relaxed) >= 4) {
+            return DR_OK;
+        }
+
+        // Copy the frame payload now. du is freed by LiCompleteVideoFrame()
+        // immediately after this method returns, so it must not be touched
+        // asynchronously.
+        NSData *frameData;
+        if (du->bufferList->next == nullptr) {
+            frameData = [NSData dataWithBytes:du->bufferList->data
+                                       length:du->bufferList->length];
+        } else {
+            NSMutableData *mutableData = [NSMutableData dataWithCapacity:du->fullLength];
+            for (PLENTRY entry = du->bufferList; entry != nullptr; entry = entry->next) {
+                [mutableData appendBytes:entry->data length:entry->length];
+            }
+            frameData = mutableData;
+        }
+        uint32_t frameNumber = du->frameNumber;
+
+        d->pendingFrames.fetch_add(1, std::memory_order_relaxed);
+        dispatch_async(_renderQueue, ^{
+            int result = [self processDecodeUnit:frameData frameNumber:frameNumber];
+            d->pendingFrames.fetch_sub(1, std::memory_order_relaxed);
+            if (result == DR_NEED_IDR) {
+                LiRequestIdrFrame();
+            }
+        });
+
         return DR_OK;
     }
-
-    // Copy the frame payload now. du is freed by LiCompleteVideoFrame()
-    // immediately after this method returns, so it must not be touched
-    // asynchronously.
-    NSData *frameData;
-    if (du->bufferList->next == nullptr) {
-        frameData = [NSData dataWithBytes:du->bufferList->data
-                                   length:du->bufferList->length];
-    } else {
-        NSMutableData *mutableData = [NSMutableData dataWithCapacity:du->fullLength];
-        for (PLENTRY entry = du->bufferList; entry != nullptr; entry = entry->next) {
-            [mutableData appendBytes:entry->data length:entry->length];
-        }
-        frameData = mutableData;
-    }
-    uint32_t frameNumber = du->frameNumber;
-
-    d->pendingFrames.fetch_add(1, std::memory_order_relaxed);
-    dispatch_async(_renderQueue, ^{
-        int result = [self processDecodeUnit:frameData frameNumber:frameNumber];
-        d->pendingFrames.fetch_sub(1, std::memory_order_relaxed);
-        if (result == DR_NEED_IDR) {
-            LiRequestIdrFrame();
-        }
-    });
-
-    return DR_OK;
 }
 
 // Runs on the serial render queue (background thread). All decode and
 // present work happens here so the main thread is never blocked.
 - (int)processDecodeUnit:(NSData *)frameData frameNumber:(uint32_t)frameNumber {
+    // Guard against autoreleased temporaries (e.g. LogPyro's string
+    // concatenation) accumulating on this thread between frames.
+    @autoreleasepool {
     claimGraniteThread();
 
     if (_stopped) return DR_OK;
@@ -437,7 +451,17 @@ static void LogPyro(NSString *fmt, ...) {
     d->device->submit(cmd);
     d->wsi.end_frame();
     LogPyro(@"frame %u: presented", frameNumber);
+
+    if ((frameNumber % 300) == 0) {
+        mach_task_basic_info info = {};
+        mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+        if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info, &count) == KERN_SUCCESS) {
+            LogPyro(@"footprint: resident=%.1f MB virtual=%.1f MB", info.resident_size / 1048576.0, info.virtual_size / 1048576.0);
+        }
+    }
+
     return DR_OK;
+    }
 }
 
 - (void)stop {
