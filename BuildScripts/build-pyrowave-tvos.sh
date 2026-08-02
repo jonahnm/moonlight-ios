@@ -28,13 +28,13 @@ fi
 # ── MoltenVK ─────────────────────────────────────────────────────
 if [ ! -d "moltenvk-extract" ]; then
     echo "=== Fetching MoltenVK ${MOLTENVK_VERSION} for tvOS ==="
-    curl -L "https://github.com/KhronosGroup/MoltenVK/releases/download/v${MOLTENVK_VERSION}/MoltenVK-tvos.tar" -o moltenvk.tar
+    curl -L "https://github.com/KhronosGroup/MoltenVK/releases/download/v${MOLTENVK_VERSION}/MoltenVK-all.tar" -o moltenvk.tar
     mkdir -p moltenvk-extract
     tar xf moltenvk.tar -C moltenvk-extract
 fi
 mkdir -p "$LIBS_DIR/MoltenVK/include"
-# Find MoltenVK.framework for tvos-arm64 regardless of archive structure
-FW="$(find "$BUILD_DIR/moltenvk-extract" -path "*/tvos-arm64/MoltenVK.framework" -type d | head -1)"
+# Find MoltenVK.framework for tvos-arm64 from the xcframework archive
+FW="$(find "$BUILD_DIR/moltenvk-extract" -path "*/tvos-arm64*/MoltenVK.framework" -type d | head -1)"
 if [ -z "$FW" ]; then
     echo "ERROR: MoltenVK.framework for tvos-arm64 not found in archive"
     exit 1
@@ -45,6 +45,8 @@ if [ -d "$BUILD_DIR/moltenvk-extract/Include" ]; then
     cp -R "$BUILD_DIR/moltenvk-extract/Include/" "$LIBS_DIR/MoltenVK/include/"
 elif [ -d "$BUILD_DIR/moltenvk-extract/MoltenVK/MoltenVK/include" ]; then
     cp -R "$BUILD_DIR/moltenvk-extract/MoltenVK/MoltenVK/include/" "$LIBS_DIR/MoltenVK/include/"
+elif [ -d "$BUILD_DIR/moltenvk-extract/MoltenVK/include" ]; then
+    cp -R "$BUILD_DIR/moltenvk-extract/MoltenVK/include/" "$LIBS_DIR/MoltenVK/include/"
 fi
 
 # ── Granite ──────────────────────────────────────────────────────
