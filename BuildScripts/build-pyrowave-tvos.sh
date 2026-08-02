@@ -34,7 +34,7 @@ if [ ! -d "moltenvk-extract" ]; then
 fi
 mkdir -p "$LIBS_DIR/MoltenVK/include"
 # Find MoltenVK.framework for tvos-arm64 from the xcframework archive
-FW="$(find "$BUILD_DIR/moltenvk-extract" -path "*/tvos-arm64*/MoltenVK.framework" -type d | head -1)"
+  FW="$(find "$BUILD_DIR/moltenvk-extract" -path "*/tvos-arm64*/MoltenVK.framework" -not -path "*simulator*" -type d | head -1)"
 if [ -z "$FW" ]; then
     echo "ERROR: MoltenVK.framework for tvos-arm64 not found in archive"
     exit 1
