@@ -47,6 +47,7 @@ granite_libs = Dir.glob(File.join(ENV['PROJECT_DIR'], 'libs', 'Granite', 'lib', 
                .map { |f| "-l" + File.basename(f).sub(/^lib/, '').sub(/\.a$/, '') }
 links_to_add = %w[-lpyrowave] + granite_libs
 frameworks_to_add = %w[MoltenVK QuartzCore Metal IOSurface IOKit]
+ios_only_frameworks = %w[IOKit]
 defines_to_add = %w[
   HAVE_PYROWAVE=1 GRANITE_VULKAN_SYSTEM_HANDLES=1
   GRANITE_VULKAN_SPIRV_CROSS=1 PYROWAVE_PRECISION=1
@@ -54,6 +55,12 @@ defines_to_add = %w[
 ]
 
 project.targets.each do |target|
+  # Detect whether this target targets tvOS by checking SDKROOT in its configs
+  is_tvos = target.build_configurations.any? do |config|
+    sdkroot = config.build_settings['SDKROOT']
+    sdkroot.to_s.match?(/appletv/)
+  end
+
   target.build_configurations.each do |config|
     hs = (config.build_settings['HEADER_SEARCH_PATHS'] || [])
     hs = hs.split if hs.is_a?(String)
@@ -74,7 +81,8 @@ project.targets.each do |target|
     ld = ld.split if ld.is_a?(String)
     ld << '$(inherited)' unless ld.include?('$(inherited)')
     links_to_add.each { |l| ld << l unless ld.include?(l) }
-    frameworks_to_add.each do |fw|
+    # Skip iOS-only frameworks (e.g. IOKit) on tvOS targets
+    frameworks_to_add.reject { |fw| is_tvos && ios_only_frameworks.include?(fw) }.each do |fw|
       pair = ['-framework', fw]
       ld.concat(pair) unless ld.each_cons(2).include?(pair)
     end
