@@ -1,0 +1,163 @@
+name: Build tvOS with PyroWave
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: Build configuration
+        default: Release
+        type: choice
+        options:
+          - Debug
+          - Release
+      signing:
+        description: Code signing
+        default: unsigned
+        type: choice
+        options:
+          - unsigned
+          - automatic
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    env:
+      CONFIGURATION: ${{ github.event.inputs.configuration || 'Release' }}
+      SIGNING: ${{ github.event.inputs.signing || 'unsigned' }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          brew install cmake ninja
+          gem install xcodeproj
+
+      - name: Restore PyroWave cache
+        id: pyrowave-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            /tmp/pyrowave-tvos-build
+            libs/Granite
+            libs/PyroWave
+            libs/MoltenVK
+          key: pyrowave-tvos-${{ hashFiles('BuildScripts/build-pyrowave-tvos.sh') }}
+
+      - name: Build PyroWave dependencies (Granite + PyroWave + MoltenVK)
+        run: bash BuildScripts/build-pyrowave-tvos.sh
+
+      - name: Save PyroWave cache (only if build succeeded)
+        uses: actions/cache/save@v4
+        if: steps.pyrowave-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            /tmp/pyrowave-tvos-build
+            libs/Granite
+            libs/PyroWave
+            libs/MoltenVK
+          key: pyrowave-tvos-${{ hashFiles('BuildScripts/build-pyrowave-tvos.sh') }}
+
+      - name: Integrate PyroWave into Xcode project
+        run: bash BuildScripts/integrate-pyrowave-xcode.sh
+
+      - name: Build archive
+        run: |
+          SIGN_ARGS=()
+          if [ "$SIGNING" = "automatic" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            SIGN_ARGS=(
+              DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
+              -allowProvisioningUpdates
+            )
+          else
+            SIGN_ARGS=(
+              CODE_SIGN_IDENTITY=""
+              CODE_SIGNING_REQUIRED=NO
+              CODE_SIGNING_ALLOWED=NO
+            )
+          fi
+
+          set +e
+          xcodebuild archive \
+            -project Moonlight.xcodeproj \
+            -scheme "Moonlight TV" \
+            -configuration "$CONFIGURATION" \
+            -sdk appletvos \
+            -archivePath "$RUNNER_TEMP/MoonlightTV.xcarchive" \
+            "${SIGN_ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+          BUILD_EXIT=${PIPESTATUS[0]}
+          echo "xcodebuild exit code: $BUILD_EXIT"
+          grep -n "error:" "$RUNNER_TEMP/xcodebuild.log" | head -50 || true
+          exit $BUILD_EXIT
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: ${{ runner.temp }}/xcodebuild.log
+          if-no-files-found: warn
+
+      - name: Package IPA
+        run: |
+          if [ "$SIGNING" = "automatic" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            mkdir -p "$RUNNER_TEMP/export"
+
+            echo '<?xml version="1.0" encoding="UTF-8"?>' \
+              > "$RUNNER_TEMP/export/exportOptions.plist"
+            echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
+            echo '<plist version="1.0"><dict>' \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
+            echo '<key>method</key><string>development</string>' \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
+            echo '<key>signingStyle</key><string>automatic</string>' \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
+            echo '<key>teamID</key>' \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
+            echo "<string>${APPLE_TEAM_ID}</string>" \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
+            echo '</dict></plist>' \
+              >> "$RUNNER_TEMP/export/exportOptions.plist"
+
+            xcodebuild -exportArchive \
+              -archivePath "$RUNNER_TEMP/MoonlightTV.xcarchive" \
+              -exportPath "$GITHUB_WORKSPACE/build" \
+              -exportOptionsPlist "$RUNNER_TEMP/export/exportOptions.plist" \
+              -allowProvisioningUpdates
+
+            if [ -f "$GITHUB_WORKSPACE/build/Moonlight TV.ipa" ]; then
+              mv "$GITHUB_WORKSPACE/build/Moonlight TV.ipa" \
+                 "$GITHUB_WORKSPACE/build/MoonlightTV-$CONFIGURATION-signed.ipa"
+            elif [ -f "$GITHUB_WORKSPACE/build/MoonlightTV.ipa" ]; then
+              mv "$GITHUB_WORKSPACE/build/MoonlightTV.ipa" \
+                 "$GITHUB_WORKSPACE/build/MoonlightTV-$CONFIGURATION-signed.ipa"
+            fi
+          else
+            APP_NAME="Moonlight TV"
+            mkdir -p "$GITHUB_WORKSPACE/build/Payload"
+            cp -R "$RUNNER_TEMP/MoonlightTV.xcarchive/Products/Applications/$APP_NAME.app" \
+                  "$GITHUB_WORKSPACE/build/Payload/"
+            cd "$GITHUB_WORKSPACE/build"
+            zip -r "MoonlightTV-$CONFIGURATION-unsigned.ipa" Payload/
+            rm -rf Payload/
+          fi
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoonlightTV-${{ github.event.inputs.configuration || 'Release' }}
+          path: build/*.ipa
+          if-no-files-found: error
