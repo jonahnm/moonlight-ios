@@ -441,8 +441,9 @@ static void LogPyro(NSString *fmt, ...) {
 
     auto cmd = d->device->request_command_buffer();
 
-    // Decode via PyroWave fragment-path shaders. decode() handles its own
-    // layout transitions and leaves the planes in READ_ONLY_OPTIMAL.
+    // Decode via PyroWave compute-path shaders (fragment path if
+    // PyroWaveFragmentPath is set). decode() handles its own layout
+    // transitions and leaves the planes in READ_ONLY_OPTIMAL.
     if (!d->decoder.decode(*cmd, d->views)) {
         LogPyro(@"decode() returned false");
     }
@@ -544,9 +545,9 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     chromaW = (c == PyroWave::ChromaSubsampling::Chroma420) ? width >> 1 : width;
     chromaH = (c == PyroWave::ChromaSubsampling::Chroma420) ? height >> 1 : height;
 
-    // Fragment path: use R8_UNORM, no STORAGE needed.
-    // NOTE: STORAGE is added so the MoltenVK-backed MTLTexture has
-    // MTLTextureUsage.shaderWrite, enabling native Metal compute interop.
+    // YCbCr plane images. STORAGE is included so the compute-path iDWT can
+    // write them via shader storage, and COLOR_ATTACHMENT/SAMPLED cover the
+    // fragment-path and the present pass.
     VkFormat plane_format = VK_FORMAT_R8_UNORM;
     ImageCreateInfo info = ImageCreateInfo::immutable_2d_image(width, height, plane_format);
     info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
@@ -563,15 +564,25 @@ bool PyroWaveImpl::init_decoder(PyroWave::ChromaSubsampling c) {
     for (int i = 0; i < 3; i++)
         views.planes[i] = &yuvImages[i]->get_view();
 
-    if (!decoder.init(device, width, height, chroma, true)) {
+    // PyroWave's fragment path (many small render passes with scissor
+    // tricks) is a fallback for GPUs with weak compute support. On Apple
+    // GPUs the compute path does far fewer passes and is substantially
+    // faster, which matters at 4K because decode time is the input-latency
+    // floor. Default to the compute path; to fall back to fragment, run:
+    //   defaults write <bundle-id> PyroWaveFragmentPath -bool YES
+    static bool fragment_path = [] {
+        return [[NSUserDefaults standardUserDefaults] boolForKey:@"PyroWaveFragmentPath"];
+    }();
+    if (!decoder.init(device, width, height, chroma, fragment_path)) {
         LogPyro(@"Decoder::init() failed");
         return false;
     }
 
-    LogPyro(@"Decoder ready %dx%d chroma=%s hdr=%d bt2020=%d full_range=%d",
+    LogPyro(@"Decoder ready %dx%d chroma=%s hdr=%d bt2020=%d full_range=%d path=%s",
           width, height,
           (c == PyroWave::ChromaSubsampling::Chroma444) ? "4:4:4" : "4:2:0",
-          is_hdr, bt2020, full_range);
+          is_hdr, bt2020, full_range,
+          fragment_path ? "fragment" : "compute");
     decoder_ready = true;
     return true;
 }
