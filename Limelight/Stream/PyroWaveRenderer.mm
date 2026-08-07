@@ -324,12 +324,11 @@ static void LogPyro(NSString *fmt, ...) {
     @autoreleasepool {
         if (_stopped) return DR_OK;
 
-        // Bound the render queue: drop frames if the background decoder is
-        // backed up, so we never accumulate unbounded frame data. PyroWave
-        // frames are intra-only, so dropping stale ones is always safe. Keep
-        // the bound tight (2) so a decoder/GPU stall can never push the
-        // displayed frame more than ~2 frames behind the newest arrival.
-        if (d->pendingFrames.load(std::memory_order_relaxed) >= 2) {
+        // Bound the render queue to cap transient memory use only. This bound
+        // does NOT control latency: stale queued frames are skipped in
+        // processDecodeUnit (latest-frame-wins), so a deeper queue here is
+        // harmless and avoids dropping the newest frame during bursts.
+        if (d->pendingFrames.load(std::memory_order_relaxed) >= 4) {
             return DR_OK;
         }
 
@@ -371,6 +370,16 @@ static void LogPyro(NSString *fmt, ...) {
     claimGraniteThread();
 
     if (_stopped) return DR_OK;
+
+    // Latest-frame-wins: if a newer frame is already queued behind this one,
+    // this frame is already stale, so skip it. PyroWave frames are intra-only
+    // (independently decodable), so skipping never hurts picture quality.
+    // This keeps the displayed frame at most ~1 decode behind the newest
+    // arrival even when the software decoder cannot keep up with the stream
+    // rate (e.g. 4K), which is what actually bounds input latency.
+    if (d->pendingFrames.load(std::memory_order_relaxed) > 1) {
+        return DR_OK;
+    }
 
     if (!d->initialized) {
         if (![self initializeDecoder]) {
