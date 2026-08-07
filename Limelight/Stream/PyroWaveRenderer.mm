@@ -283,7 +283,13 @@ static void LogPyro(NSString *fmt, ...) {
     }
 
     d->wsi.set_platform(&d->platform);
-    d->wsi.set_present_mode(PresentMode::UnlockedNoTearing);
+    // UnlockedNoTearing (Force MAILBOX) silently falls back to vsync-locked FIFO
+    // on MoltenVK, which only exposes FIFO and IMMEDIATE. FIFO makes the
+    // swapchain acquire block for ~1 full vsync per frame, permanently
+    // saturating the render queue and adding ~4-5 frames of input latency.
+    // UnlockedMaybeTear resolves to IMMEDIATE on MoltenVK: frames are decoded
+    // and presented as soon as they arrive, and the queue self-drains.
+    d->wsi.set_present_mode(PresentMode::UnlockedMaybeTear);
     d->wsi.set_backbuffer_format(BackbufferFormat::UNORM);
 
     if (!d->wsi.init_from_existing_context(std::move(ctx))) {
@@ -319,8 +325,11 @@ static void LogPyro(NSString *fmt, ...) {
         if (_stopped) return DR_OK;
 
         // Bound the render queue: drop frames if the background decoder is
-        // backed up, so we never accumulate unbounded frame data.
-        if (d->pendingFrames.load(std::memory_order_relaxed) >= 4) {
+        // backed up, so we never accumulate unbounded frame data. PyroWave
+        // frames are intra-only, so dropping stale ones is always safe. Keep
+        // the bound tight (2) so a decoder/GPU stall can never push the
+        // displayed frame more than ~2 frames behind the newest arrival.
+        if (d->pendingFrames.load(std::memory_order_relaxed) >= 2) {
             return DR_OK;
         }
 
