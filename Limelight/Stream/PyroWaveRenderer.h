@@ -15,8 +15,14 @@
 
 - (id)initWithView:(UIView*)view;
 - (void)setupWithVideoFormat:(int)videoFormat width:(int)videoWidth height:(int)videoHeight;
-- (int)submitDecodeUnit:(PDECODE_UNIT)du;
+// Starts the decode/present pull loop on a background thread. All frame
+// submission, copying, decoding and completion happens off the main thread so
+// the main thread is always free to deliver controller input immediately.
+- (void)start;
 - (void)stop;
+// Invoked (on the render thread) when an IDR frame is successfully shown, so
+// the loading indicator can be hidden.
+@property (nonatomic, copy) void (^videoContentShownHandler)(void);
 - (void)setHdrMode:(BOOL)enabled;
 - (int)decoderColorspace;
 - (int)decoderColorRange;

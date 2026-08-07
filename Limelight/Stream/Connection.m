@@ -137,45 +137,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
         return DR_NEED_IDR;
     }
     
-    CFTimeInterval now = CACurrentMediaTime();
-    if (!lastFrameNumber) {
-        currentVideoStats.startTime = now;
-        lastFrameNumber = decodeUnit->frameNumber;
-    }
-    else {
-        // Flip stats roughly every second
-        if (now - currentVideoStats.startTime >= 1.0f) {
-            currentVideoStats.endTime = now;
-            
-            [videoStatsLock lock];
-            lastVideoStats = currentVideoStats;
-            [videoStatsLock unlock];
-            
-            memset(&currentVideoStats, 0, sizeof(currentVideoStats));
-            currentVideoStats.startTime = now;
-        }
-        
-        // Any frame number greater than m_LastFrameNumber + 1 represents a dropped frame
-        currentVideoStats.networkDroppedFrames += decodeUnit->frameNumber - (lastFrameNumber + 1);
-        currentVideoStats.totalFrames += decodeUnit->frameNumber - (lastFrameNumber + 1);
-        lastFrameNumber = decodeUnit->frameNumber;
-    }
-    
-    if (decodeUnit->frameHostProcessingLatency != 0) {
-        if (currentVideoStats.minHostProcessingLatency == 0 || decodeUnit->frameHostProcessingLatency < currentVideoStats.minHostProcessingLatency) {
-            currentVideoStats.minHostProcessingLatency = decodeUnit->frameHostProcessingLatency;
-        }
-        
-        if (decodeUnit->frameHostProcessingLatency > currentVideoStats.maxHostProcessingLatency) {
-            currentVideoStats.maxHostProcessingLatency = decodeUnit->frameHostProcessingLatency;
-        }
-        
-        currentVideoStats.framesWithHostProcessingLatency++;
-        currentVideoStats.totalHostProcessingLatency += decodeUnit->frameHostProcessingLatency;
-    }
-    
-    currentVideoStats.receivedFrames++;
-    currentVideoStats.totalFrames++;
+    DrNoteVideoFrameSubmitted(decodeUnit);
 
     PLENTRY entry = decodeUnit->bufferList;
     while (entry != NULL) {
@@ -203,6 +165,53 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
                                  length:offset
                              bufferType:BUFFER_TYPE_PICDATA
                              decodeUnit:decodeUnit];
+}
+
+// Tracks per-frame video statistics. Called for every frame that reaches the
+// client, both on the hardware-decode path (from DrSubmitDecodeUnit) and on
+// the PyroWave path (from the renderer's pull loop), so the stats overlay
+// keeps working when frame submission happens off the main thread.
+void DrNoteVideoFrameSubmitted(PDECODE_UNIT decodeUnit)
+{
+    CFTimeInterval now = CACurrentMediaTime();
+    if (!lastFrameNumber) {
+        currentVideoStats.startTime = now;
+        lastFrameNumber = decodeUnit->frameNumber;
+    }
+    else {
+        // Flip stats roughly every second
+        if (now - currentVideoStats.startTime >= 1.0f) {
+            currentVideoStats.endTime = now;
+
+            [videoStatsLock lock];
+            lastVideoStats = currentVideoStats;
+            [videoStatsLock unlock];
+
+            memset(&currentVideoStats, 0, sizeof(currentVideoStats));
+            currentVideoStats.startTime = now;
+        }
+
+        // Any frame number greater than m_LastFrameNumber + 1 represents a dropped frame
+        currentVideoStats.networkDroppedFrames += decodeUnit->frameNumber - (lastFrameNumber + 1);
+        currentVideoStats.totalFrames += decodeUnit->frameNumber - (lastFrameNumber + 1);
+        lastFrameNumber = decodeUnit->frameNumber;
+    }
+
+    if (decodeUnit->frameHostProcessingLatency != 0) {
+        if (currentVideoStats.minHostProcessingLatency == 0 || decodeUnit->frameHostProcessingLatency < currentVideoStats.minHostProcessingLatency) {
+            currentVideoStats.minHostProcessingLatency = decodeUnit->frameHostProcessingLatency;
+        }
+
+        if (decodeUnit->frameHostProcessingLatency > currentVideoStats.maxHostProcessingLatency) {
+            currentVideoStats.maxHostProcessingLatency = decodeUnit->frameHostProcessingLatency;
+        }
+
+        currentVideoStats.framesWithHostProcessingLatency++;
+        currentVideoStats.totalHostProcessingLatency += decodeUnit->frameHostProcessingLatency;
+    }
+
+    currentVideoStats.receivedFrames++;
+    currentVideoStats.totalFrames++;
 }
 
 int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, void* context, int flags)
@@ -480,11 +489,13 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _drCallbacks.setup = DrDecoderSetup;
     _drCallbacks.start = DrStart;
     _drCallbacks.stop = DrStop;
-    // Frame submission: the renderer's CADisplayLink runs on the main thread,
-    // polls frames via LiPollNextVideoFrame, and submits through C function
-    // DrSubmitDecodeUnit directly. submitDecodeUnit is left NULL since the
-    // displayLink drives frame submission, not common-c's internal push path.
-    // Common-c rejects CAPABILITY_PULL_RENDERER + submitDecodeUnit combined.
+    // Frame submission: the renderer drives LiPollNextVideoFrame itself. The
+    // hardware-decode path polls from the main thread's CADisplayLink and
+    // submits through the C function DrSubmitDecodeUnit; the PyroWave path
+    // pulls frames from its own render thread. submitDecodeUnit is left NULL
+    // since the renderer drives frame submission, not common-c's internal push
+    // path. Common-c rejects CAPABILITY_PULL_RENDERER + submitDecodeUnit
+    // combined.
     _drCallbacks.capabilities = CAPABILITY_PULL_RENDERER |
                                 CAPABILITY_REFERENCE_FRAME_INVALIDATION_HEVC |
                                 CAPABILITY_REFERENCE_FRAME_INVALIDATION_AV1;

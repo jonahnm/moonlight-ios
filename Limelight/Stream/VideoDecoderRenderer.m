@@ -106,11 +106,25 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
         [displayLayer removeFromSuperlayer];
         _pyroRenderer = [[PyroWaveRenderer alloc] initWithView:_view];
         [_pyroRenderer setupWithVideoFormat:videoFormat width:videoWidth height:videoHeight];
+        __weak typeof(self) weakSelf = self;
+        _pyroRenderer.videoContentShownHandler = ^{
+            // Called from the render thread; UI work must run on the main thread.
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [weakSelf->_callbacks videoContentShown];
+            });
+        };
     }
 }
 
 - (void)start
 {
+    // PyroWave pulls frames on its own render thread so the main thread is
+    // never occupied with video work (controller input stays instantaneous).
+    if (_pyroRenderer) {
+        [_pyroRenderer start];
+        return;
+    }
+
     _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
     if (@available(iOS 15.0, tvOS 15.0, *)) {
         _displayLink.preferredFrameRateRange = CAFrameRateRangeMake(self->frameRate, self->frameRate, self->frameRate);
@@ -123,6 +137,11 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
 
 - (void)displayLinkCallback:(CADisplayLink *)sender
 {
+    // PyroWave pulls and submits frames from its own render thread.
+    if (_pyroRenderer) {
+        return;
+    }
+
     VIDEO_FRAME_HANDLE handle;
     PDECODE_UNIT du;
     
@@ -411,16 +430,15 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 {
     OSStatus status;
     
-    // PyroWave uses its own decoder path
+    // PyroWave decodes and presents via its own render-thread pull loop
+    // (started in -start), so DrSubmitDecodeUnit() is never called for it and
+    // this branch is unreachable. Keep it for safety: free the payload and
+    // report success so a stray submission can't leak or wedge the stream.
     if (videoFormat & VIDEO_FORMAT_MASK_PYROWAVE) {
-        int ret = [_pyroRenderer submitDecodeUnit:du];
-        if (du->frameType == FRAME_TYPE_IDR && ret == DR_OK) {
-            [self->_callbacks videoContentShown];
-        }
         if (bufferType == BUFFER_TYPE_PICDATA) {
             free(data);
         }
-        return ret;
+        return DR_OK;
     }
     
     // Construct a new format description object each time we receive an IDR frame

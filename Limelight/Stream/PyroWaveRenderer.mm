@@ -172,9 +172,6 @@ struct PyroWaveImpl {
     PyroWave::ViewBuffers views;
     Program *present_program = nullptr;
 
-    // Number of frames queued on the render thread (for bounding queue depth).
-    std::atomic<int> pendingFrames{0};
-
     bool init_swapchain(bool want_hdr);
     bool init_decoder(PyroWave::ChromaSubsampling c);
 };
@@ -188,6 +185,9 @@ static void LogPyro(NSString *fmt, ...) {
     // Public os_log so messages survive iOS privacy redaction in device logs
     os_log(MoonlightPublicLog(), "%{public}s", msg.UTF8String);
 }
+
+// Tracks per-frame video statistics off the main thread (see Connection.m).
+extern "C" void DrNoteVideoFrameSubmitted(PDECODE_UNIT decodeUnit);
 
 @implementation PyroWaveRenderer {
     std::unique_ptr<PyroWaveImpl> d;
@@ -315,55 +315,87 @@ static void LogPyro(NSString *fmt, ...) {
     return YES;
 }
 
-- (int)submitDecodeUnit:(PDECODE_UNIT)du {
-    // This runs on moonlight-common's VideoDecoderThreadProc, a plain
-    // pthread with NO autorelease pool. All autoreleased objects created
-    // here would otherwise leak (their pending autorelease release never
-    // fires). Wrapping in an autorelease pool drains them immediately.
-    // The block retains frameData, so it stays alive until processed.
-    @autoreleasepool {
-        if (_stopped) return DR_OK;
+// Runs on the serial render queue (background thread). All frame submission,
+// copying, decoding, presentation and completion happens here so the main
+// thread is never occupied with video work and always free to deliver
+// controller input immediately.
+- (void)start {
+    dispatch_async(_renderQueue, ^{
+        @autoreleasepool {
+        while (!_stopped) {
+            VIDEO_FRAME_HANDLE handle;
+            PDECODE_UNIT du;
 
-        // Bound the render queue to cap transient memory use only. This bound
-        // does NOT control latency: stale queued frames are skipped in
-        // processDecodeUnit (latest-frame-wins), so a deeper queue here is
-        // harmless and avoids dropping the newest frame during bursts.
-        if (d->pendingFrames.load(std::memory_order_relaxed) >= 4) {
-            return DR_OK;
-        }
-
-        // Copy the frame payload now. du is freed by LiCompleteVideoFrame()
-        // immediately after this method returns, so it must not be touched
-        // asynchronously.
-        NSData *frameData;
-        if (du->bufferList->next == nullptr) {
-            frameData = [NSData dataWithBytes:du->bufferList->data
-                                       length:du->bufferList->length];
-        } else {
-            NSMutableData *mutableData = [NSMutableData dataWithCapacity:du->fullLength];
-            for (PLENTRY entry = du->bufferList; entry != nullptr; entry = entry->next) {
-                [mutableData appendBytes:entry->data length:entry->length];
+            // Block until a frame arrives (or we're woken/shutdown). This
+            // pulls frames the moment they are reassembled, with no 60Hz
+            // display-link quantization, so nothing sits in a queue.
+            if (!LiWaitForNextVideoFrame(&handle, &du)) {
+                continue;
             }
-            frameData = mutableData;
-        }
-        uint32_t frameNumber = du->frameNumber;
 
-        d->pendingFrames.fetch_add(1, std::memory_order_relaxed);
-        dispatch_async(_renderQueue, ^{
-            int result = [self processDecodeUnit:frameData frameNumber:frameNumber];
-            d->pendingFrames.fetch_sub(1, std::memory_order_relaxed);
+            DrNoteVideoFrameSubmitted(du);
+
+            // Latest-frame-wins: skip every queued frame except the newest.
+            // PyroWave frames are intra-only, so draining stale ones (freeing
+            // them without decoding) never hurts picture quality, and keeps
+            // the displayed frame at most ~1 decode behind the newest arrival.
+            VIDEO_FRAME_HANDLE nextHandle;
+            PDECODE_UNIT nextDu;
+            while (LiPollNextVideoFrame(&nextHandle, &nextDu)) {
+                if (du->frameType == FRAME_TYPE_IDR) {
+                    [self notifyVideoContentShown];
+                }
+                LiCompleteVideoFrame(handle, DR_OK);
+                handle = nextHandle;
+                du = nextDu;
+                DrNoteVideoFrameSubmitted(du);
+            }
+
+            int result = [self processDecodeUnit:du];
+
+            if (du->frameType == FRAME_TYPE_IDR && result == DR_OK) {
+                [self notifyVideoContentShown];
+            }
+
+            LiCompleteVideoFrame(handle, result);
             if (result == DR_NEED_IDR) {
                 LiRequestIdrFrame();
             }
-        });
+        }
+        }
+    });
+}
 
-        return DR_OK;
+- (void)notifyVideoContentShown {
+    if (self.videoContentShownHandler) {
+        self.videoContentShownHandler();
+    }
+}
+
+- (void)stop {
+    _stopped = true;
+    // Wake the pull loop out of LiWaitForNextVideoFrame() so it can observe
+    // _stopped and exit, then wait for any in-flight decode to finish.
+    LiWakeWaitForVideoFrame();
+    if (_renderQueue) {
+        dispatch_sync(_renderQueue, ^{});
+    }
+    claimGraniteThread();
+    if (d->device) {
+        d->device->wait_idle();
+    }
+    for (auto &img : d->yuvImages) {
+        img.reset();
+    }
+    if (d->metalLayer) {
+        [d->metalLayer removeFromSuperlayer];
+        d->metalLayer = nil;
     }
 }
 
 // Runs on the serial render queue (background thread). All decode and
 // present work happens here so the main thread is never blocked.
-- (int)processDecodeUnit:(NSData *)frameData frameNumber:(uint32_t)frameNumber {
+- (int)processDecodeUnit:(PDECODE_UNIT)du {
     // Guard against autoreleased temporaries (e.g. LogPyro's string
     // concatenation) accumulating on this thread between frames.
     @autoreleasepool {
@@ -371,15 +403,21 @@ static void LogPyro(NSString *fmt, ...) {
 
     if (_stopped) return DR_OK;
 
-    // Latest-frame-wins: if a newer frame is already queued behind this one,
-    // this frame is already stale, so skip it. PyroWave frames are intra-only
-    // (independently decodable), so skipping never hurts picture quality.
-    // This keeps the displayed frame at most ~1 decode behind the newest
-    // arrival even when the software decoder cannot keep up with the stream
-    // rate (e.g. 4K), which is what actually bounds input latency.
-    if (d->pendingFrames.load(std::memory_order_relaxed) > 1) {
-        return DR_OK;
+    // Concatenate the buffer chain into one contiguous payload for the
+    // decoder (it parses the bitstream in place). This copy runs on the
+    // render thread, never the main thread.
+    NSData *frameData;
+    if (du->bufferList->next == nullptr) {
+        frameData = [NSData dataWithBytes:du->bufferList->data
+                                   length:du->bufferList->length];
+    } else {
+        NSMutableData *mutableData = [NSMutableData dataWithCapacity:du->fullLength];
+        for (PLENTRY entry = du->bufferList; entry != nullptr; entry = entry->next) {
+            [mutableData appendBytes:entry->data length:entry->length];
+        }
+        frameData = mutableData;
     }
+    uint32_t frameNumber = du->frameNumber;
 
     if (!d->initialized) {
         if (![self initializeDecoder]) {
@@ -480,25 +518,6 @@ static void LogPyro(NSString *fmt, ...) {
     }
 
     return DR_OK;
-    }
-}
-
-- (void)stop {
-    _stopped = true;
-    // Drain any frames still queued on the render thread before tearing down.
-    if (_renderQueue) {
-        dispatch_sync(_renderQueue, ^{});
-    }
-    claimGraniteThread();
-    if (d->device) {
-        d->device->wait_idle();
-    }
-    for (auto &img : d->yuvImages) {
-        img.reset();
-    }
-    if (d->metalLayer) {
-        [d->metalLayer removeFromSuperlayer];
-        d->metalLayer = nil;
     }
 }
 
