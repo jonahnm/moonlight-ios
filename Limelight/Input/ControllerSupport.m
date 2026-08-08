@@ -506,6 +506,14 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                 supportedButtonFlags |= BACK_FLAG;
             }
         }
+        if (@available(iOS 15.0, tvOS 15.0, *)) {
+            // No dedicated Select button: the Share/Create button acts as
+            // Select instead (some DualSense builds expose only that).
+            if (controller.extendedGamepad.buttonOptions == nil &&
+                controller.physicalInputProfile.buttons[GCInputButtonShare]) {
+                supportedButtonFlags |= BACK_FLAG;
+            }
+        }
         if (@available(iOS 14.0, tvOS 14.0, *)) {
             // The Guide button is always available because Start+Select
             // emulates it on every controller, even without buttonHome.
@@ -547,7 +555,10 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                 supportedButtonFlags |= PADDLE4_FLAG;
             }
             if (@available(iOS 15.0, tvOS 15.0, *)) {
-                if (controller.physicalInputProfile.buttons[GCInputButtonShare]) {
+                // Share is a real misc button (Xbox) only when a dedicated
+                // Select button exists; otherwise it's already Select.
+                if (controller.extendedGamepad.buttonOptions != nil &&
+                    controller.physicalInputProfile.buttons[GCInputButtonShare]) {
                     supportedButtonFlags |= MISC_FLAG;
                 }
             }
@@ -688,6 +699,16 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                 controller.extendedGamepad.buttonOptions != nil) {
                 useLegacyPausedHandler = NO;
             }
+            else if (@available(iOS 15.0, tvOS 15.0, *)) {
+                // Modern controllers (Xbox, DualShock, DualSense) expose the
+                // menu button through the extended gamepad profile even when
+                // no dedicated Select button (buttonOptions) is present, so
+                // Start must be reported as a proper held button rather than
+                // the legacy pause pulse.
+                if (controller.physicalInputProfile.buttons[GCInputButtonShare] != nil) {
+                    useLegacyPausedHandler = NO;
+                }
+            }
         }
         
         if (useLegacyPausedHandler) {
@@ -763,6 +784,16 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                         // the controllerPausedHandler.
                         UPDATE_BUTTON_FLAG(limeController, PLAY_FLAG, gamepad.buttonMenu.pressed);
                     }
+                    else if (@available(iOS 15.0, tvOS 15.0, *)) {
+                        // No dedicated Select button exposed (e.g. some DualSense
+                        // builds only expose the Create button as GCInputButtonShare).
+                        // Fall back to the Share/Create button as Select so the
+                        // Start+Select Guide combo still works.
+                        if (gamepad.controller.physicalInputProfile.buttons[GCInputButtonShare]) {
+                            UPDATE_BUTTON_FLAG(limeController, BACK_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputButtonShare].pressed);
+                            UPDATE_BUTTON_FLAG(limeController, PLAY_FLAG, gamepad.buttonMenu.pressed);
+                        }
+                    }
                 }
                 
                 if (@available(iOS 14.0, tvOS 14.0, *)) {
@@ -785,8 +816,12 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                         UPDATE_BUTTON_FLAG(limeController, PADDLE4_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleFour].pressed);
                     }
                     if (@available(iOS 15.0, tvOS 15.0, *)) {
-                        if (gamepad.controller.physicalInputProfile.buttons[GCInputButtonShare]) {
-                            UPDATE_BUTTON_FLAG(limeController, MISC_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputButtonShare].pressed);
+                        // Only treat Share as the misc button when a dedicated
+                        // Select button exists; otherwise it's already Select.
+                        if (gamepad.buttonOptions != nil) {
+                            if (gamepad.controller.physicalInputProfile.buttons[GCInputButtonShare]) {
+                                UPDATE_BUTTON_FLAG(limeController, MISC_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputButtonShare].pressed);
+                            }
                         }
                     }
                     
@@ -978,6 +1013,22 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             limeController.playerIndex = i;
             limeController.supportedEmulationFlags = EMULATING_SPECIAL | EMULATING_SELECT;
             limeController.gamepad = controller;
+
+            if (@available(iOS 15.0, tvOS 15.0, *)) {
+                Log(LOG_I, @"Controller %d profile: menu=%d options=%d home=%d share=%d",
+                    i,
+                    controller.extendedGamepad.buttonMenu != nil,
+                    controller.extendedGamepad.buttonOptions != nil,
+                    controller.extendedGamepad.buttonHome != nil,
+                    controller.physicalInputProfile.buttons[GCInputButtonShare] != nil);
+            }
+            else {
+                Log(LOG_I, @"Controller %d profile: menu=%d options=%d home=%d",
+                    i,
+                    controller.extendedGamepad.buttonMenu != nil,
+                    controller.extendedGamepad.buttonOptions != nil,
+                    controller.extendedGamepad.buttonHome != nil);
+            }
 
             // If this is player 0, it shares state with the OSC
             limeController.mergedWithController = _oscController;
