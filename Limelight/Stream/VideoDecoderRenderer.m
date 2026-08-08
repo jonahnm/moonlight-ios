@@ -109,8 +109,12 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
         __weak typeof(self) weakSelf = self;
         _pyroRenderer.videoContentShownHandler = ^{
             // Called from the render thread; UI work must run on the main thread.
+            __strong typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) {
+                return;
+            }
             dispatch_async(dispatch_get_main_queue(), ^{
-                [weakSelf->_callbacks videoContentShown];
+                [strongSelf->_callbacks videoContentShown];
             });
         };
     }
