@@ -994,13 +994,13 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                 }
             }
             
-            if (@available(iOS 14.0, tvOS 14.0, *)) {
-                if (controller.extendedGamepad != nil &&
-                    controller.extendedGamepad.buttonHome != nil) {
-                    // Disable special button emulation since we have a physical special button
-                    limeController.supportedEmulationFlags &= ~EMULATING_SPECIAL;
-                }
-            }
+            // Start+Select always emulates the Guide button, even on
+            // controllers (e.g. Xbox) that expose a physical guide button via
+            // buttonHome. This matches the existing behavior for controllers
+            // without a physical guide button, so pressing Start+Select sends
+            // only the Guide flag to the host. Note: with this active,
+            // Start+Select+L1+R1 can no longer trigger Moonlight's in-app
+            // quit combo on those controllers (same as on PS4/PS5).
             
             // Prepare controller haptics for use
             [self initializeControllerHaptics:limeController];
