@@ -235,18 +235,12 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     }
     
     if (controller.emulatingButtonFlags & EMULATING_SPECIAL) {
-        // If Select is emulated, we use RB+Start to emulate special, otherwise we use Start+Select
-        if (controller.supportedEmulationFlags & EMULATING_SELECT) {
-            if (releasedButtons & (RB_FLAG | PLAY_FLAG)) {
-                controller.lastButtonFlags &= ~SPECIAL_FLAG;
-                controller.emulatingButtonFlags &= ~EMULATING_SPECIAL;
-            }
-        }
-        else {
-            if (releasedButtons & (BACK_FLAG | PLAY_FLAG)) {
-                controller.lastButtonFlags &= ~SPECIAL_FLAG;
-                controller.emulatingButtonFlags &= ~EMULATING_SPECIAL;
-            }
+        // Clear the emulated Guide when any button of the combo is released:
+        // Start or Select for the Start+Select combo, RB for the RB+Start
+        // fallback used on controllers without a physical Select button.
+        if (releasedButtons & (BACK_FLAG | PLAY_FLAG | RB_FLAG)) {
+            controller.lastButtonFlags &= ~SPECIAL_FLAG;
+            controller.emulatingButtonFlags &= ~EMULATING_SPECIAL;
         }
     }
 }
@@ -264,19 +258,22 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             }
         }
         else if (controller.supportedEmulationFlags & EMULATING_SPECIAL) {
-            // If Select is emulated too, use RB+Start to emulate special
-            if (controller.supportedEmulationFlags & EMULATING_SELECT) {
+            // Start+Select always emulates the Guide button whenever a Select
+            // press is registered, even if no physical Select button was
+            // detected (buttonOptions is not exposed on every controller).
+            // This keeps the combo working on PlayStation controllers and on
+            // controllers that do not expose a Select button at all. Both
+            // Start and Select are consumed so the host only sees Guide.
+            if (controller.lastButtonFlags & BACK_FLAG) {
+                controller.lastButtonFlags |= SPECIAL_FLAG;
+                controller.lastButtonFlags &= ~(PLAY_FLAG | BACK_FLAG);
+                controller.emulatingButtonFlags |= EMULATING_SPECIAL;
+            }
+            else if (controller.supportedEmulationFlags & EMULATING_SELECT) {
+                // If Select is emulated too, use RB+Start to emulate special
                 if (controller.lastButtonFlags & RB_FLAG) {
                     controller.lastButtonFlags |= SPECIAL_FLAG;
                     controller.lastButtonFlags &= ~(pressedButtons & (PLAY_FLAG | RB_FLAG));
-                    controller.emulatingButtonFlags |= EMULATING_SPECIAL;
-                }
-            }
-            else {
-                // If Select is physical, use Start+Select to emulate special
-                if (controller.lastButtonFlags & BACK_FLAG) {
-                    controller.lastButtonFlags |= SPECIAL_FLAG;
-                    controller.lastButtonFlags &= ~(pressedButtons & (PLAY_FLAG | BACK_FLAG));
                     controller.emulatingButtonFlags |= EMULATING_SPECIAL;
                 }
             }
@@ -510,9 +507,9 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             }
         }
         if (@available(iOS 14.0, tvOS 14.0, *)) {
-            if (controller.extendedGamepad.buttonHome) {
-                supportedButtonFlags |= SPECIAL_FLAG;
-            }
+            // The Guide button is always available because Start+Select
+            // emulates it on every controller, even without buttonHome.
+            supportedButtonFlags |= SPECIAL_FLAG;
         }
         if (controller.extendedGamepad.buttonA) {
             supportedButtonFlags |= A_FLAG;
